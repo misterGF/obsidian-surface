@@ -1,6 +1,8 @@
-# Surface — Obsidian Plugin
+# Surface - Obsidian Plugin
 
-Surface your notes without leaving your workflow. Write under date headings like `### March 4, 2026` and browse them by day, week, or month in a dedicated sidebar panel. Or define your own terms — words like `Important` or `Follow Up` — and Surface collects every heading that contains them, always visible in the Pinned tab.
+Surface your notes without leaving your workflow. Write under date headings like `### March 4, 2026` and browse them by day, week, or month in a dedicated sidebar panel. Or define your own terms - words like `Important` or `Follow Up` - and Surface collects every heading that contains them, always visible in the Pinned tab.
+
+![Surace screenshot](/assets/surface-screenshot.png)
 
 ---
 
@@ -10,7 +12,7 @@ Surface has two modes that work independently and can be used together.
 
 ### Date entries
 
-Surface scans every markdown file in your vault for headings that match one of the enabled date formats. Everything written below that heading — until the next heading of equal or higher level — is treated as the entry's content and shown when you navigate to that date.
+Surface scans every markdown file in your vault for headings that match one of the enabled date formats. Everything written below that heading - until the next heading of equal or higher level - is treated as the entry's content and shown when you navigate to that date.
 
 **Example note:**
 
@@ -38,13 +40,13 @@ Define keywords in Settings and Surface will collect any heading in your vault t
 ### March 4, 2026
 
 #### Important
-The auth approach we chose has implications for the mobile team — loop them in before the next sprint.
+The auth approach we chose has implications for the mobile team - loop them in before the next sprint.
 
 #### Follow Up
 Check in with Sarah about the deployment timeline.
 ```
 
-If you have `Important` and `Follow Up` configured as surface terms, both headings appear in the Pinned tab instantly — no searching, no hunting.
+If you have `Important` and `Follow Up` configured as surface terms, both headings appear in the Pinned tab instantly - no searching, no hunting.
 
 ---
 
@@ -102,7 +104,7 @@ Surface ships with six built-in date formats. Toggle them individually in Settin
 | Mon D, YYYY | `Mar 4th, 2026` |
 | D Mon YYYY | `4th Mar 2026` |
 
-All formats support optional ordinal suffixes (`1st`, `2nd`, `3rd`, `4th`...). The heading level (`#` count) does not matter — any level is recognized.
+All formats support optional ordinal suffixes (`1st`, `2nd`, `3rd`, `4th`...). The heading level (`#` count) does not matter - any level is recognized.
 
 ---
 
@@ -117,7 +119,7 @@ Go to **Settings > Surface > Surface terms** to add terms. Each term has two fie
 | **Label** | The group header shown in the Pinned tab (e.g. `Important`) |
 | **Term** | The text matched against heading content (e.g. `Important`) |
 
-Label and term can differ — for example, label `Action Items` matched by term `TODO`.
+Label and term can differ - for example, label `Action Items` matched by term `TODO`.
 
 Terms are matched as substrings, so `follow` matches `### Follow Up`, `### Follow-up needed`, and `### Things to follow`.
 
@@ -137,7 +139,7 @@ Obsidian is an Electron app, which means plugins run as Node.js/browser JavaScri
 | `main.js` | The compiled plugin code (a single CommonJS bundle) |
 | `styles.css` | Optional stylesheet, auto-injected into the app when the plugin loads |
 
-The plugin API is exposed via the `obsidian` module, which Obsidian provides at runtime. You never bundle it — it's listed as an external in the build config.
+The plugin API is exposed via the `obsidian` module, which Obsidian provides at runtime. You never bundle it - it's listed as an external in the build config.
 
 ### Plugin Lifecycle
 
@@ -214,7 +216,7 @@ To render markdown strings into a DOM element, use `MarkdownRenderer.render`:
 await MarkdownRenderer.render(this.app, markdownString, targetEl, sourcePath, component);
 ```
 
-The `component` argument (a `Component` instance) is used for lifecycle tracking — pass `this` from a view, or create a standalone `new Component()` and call `.load()` / `.unload()` yourself.
+The `component` argument (a `Component` instance) is used for lifecycle tracking - pass `this` from a view, or create a standalone `new Component()` and call `.load()` / `.unload()` yourself.
 
 ### Reading Vault Files
 
@@ -255,7 +257,7 @@ await esbuild.context({
 });
 ```
 
-TypeScript is optional but strongly recommended — the `obsidian` npm package ships full type definitions.
+TypeScript is optional but strongly recommended - the `obsidian` npm package ships full type definitions.
 
 ### Further Reading
 
@@ -283,7 +285,7 @@ Built with [esbuild](https://esbuild.github.io/). TypeScript source lives in `sr
 | File | Purpose |
 |---|---|
 | `src/main.ts` | Plugin entry point, vault scanning, entry caching |
-| `src/view.ts` | Sidebar panel UI — date view, pinned view, entry cards |
+| `src/view.ts` | Sidebar panel UI - date view, pinned view, entry cards |
 | `src/parser.ts` | Date heading parser, term matcher, date comparison utilities |
 | `src/settings.ts` | Settings types, built-in date patterns, settings tab UI |
 | `styles.css` | Panel styles (uses Obsidian CSS variables) |

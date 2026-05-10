@@ -1,0 +1,334 @@
+/* Surface — Obsidian Plugin */
+
+/* Layout */
+.surface-view {
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    height: 100%;
+}
+
+.surface-header {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    padding: 10px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    background: var(--background-primary);
+    border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.surface-entries {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    padding: 16px 14px;
+}
+
+/* Tab bar (Day / Week / Month) */
+.surface-nav-container {
+    border-radius: 8px;
+    padding: 3px;
+    background: var(--background-modifier-hover);
+}
+
+.surface-view .nav-pills {
+    display: flex;
+    gap: 0;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    width: 100%;
+}
+
+.surface-view .nav-pills .nav-item {
+    flex: 1;
+}
+
+.surface-view .nav-pills .nav-link {
+    display: block;
+    width: 100%;
+    padding: 6px 10px;
+    font-size: 0.775rem;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    border-radius: 6px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    text-align: center;
+    transition:
+        background 120ms ease,
+        color 120ms ease;
+    white-space: nowrap;
+}
+
+.surface-view .nav-pills .nav-link:hover {
+    color: var(--text-normal);
+}
+
+.surface-view .nav-pills .nav-link.active {
+    background: var(--interactive-accent);
+    color: var(--text-on-accent);
+    font-weight: 600;
+}
+
+.surface-view .nav-pills .nav-link:focus {
+    outline: none;
+}
+
+.surface-view .nav-pills .nav-link:focus-visible {
+    outline: 2px solid var(--interactive-accent);
+    outline-offset: 1px;
+}
+
+/* Navigation row */
+.surface-nav-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.surface-date-label {
+    flex: 1;
+    text-align: center;
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    color: var(--text-normal);
+}
+
+/* Nav arrow buttons */
+.surface-view .btn-nav-arrow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    flex-shrink: 0;
+    border-radius: 6px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition:
+        background 120ms ease,
+        color 120ms ease;
+}
+
+.surface-view .btn-nav-arrow:hover {
+    background: var(--background-modifier-hover);
+    color: var(--text-normal);
+}
+
+.surface-view .btn-nav-arrow:focus {
+    outline: none;
+}
+
+.surface-view .btn-nav-arrow:focus-visible {
+    outline: 2px solid var(--interactive-accent);
+    outline-offset: 2px;
+}
+
+/* CSS arrow icons */
+.surface-view .btn-nav-arrow .arrow-icon {
+    width: 7px;
+    height: 7px;
+    border-top: 1.5px solid currentColor;
+    border-right: 1.5px solid currentColor;
+    flex-shrink: 0;
+}
+
+.surface-view .btn-nav-arrow.prev .arrow-icon {
+    transform: rotate(-135deg) translate(-1px, 1px);
+}
+
+.surface-view .btn-nav-arrow.next .arrow-icon {
+    transform: rotate(45deg) translate(-1px, 1px);
+}
+
+/* Date section */
+.surface-section {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.surface-date-heading {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--text-faint);
+    margin: 0;
+    padding: 0 2px;
+}
+
+/* Entry group */
+.surface-entries-group {
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 10px;
+    background: var(--background-primary);
+    overflow: hidden;
+}
+
+/*  Entry row */
+.surface-card {
+    padding: 12px 16px;
+    transition: background 100ms ease;
+}
+
+.surface-card + .surface-card {
+    border-top: 1px solid var(--background-modifier-border);
+}
+
+.surface-card:hover {
+    background: var(--background-modifier-hover);
+}
+
+.surface-card-summary {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.surface-card-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.surface-card-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-normal);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.surface-card-preview {
+    font-size: 0.775rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Jump button — revealed on hover and focus */
+.surface-jump-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    flex-shrink: 0;
+    border-radius: 5px;
+    border: none;
+    box-shadow: none;
+    appearance: none;
+    -webkit-appearance: none;
+    background: transparent;
+    color: var(--text-faint);
+    font-size: 0.875rem;
+    line-height: 1;
+    cursor: pointer;
+    opacity: 0;
+    transition:
+        opacity 120ms ease,
+        background 120ms ease,
+        color 120ms ease;
+}
+
+.surface-card:hover .surface-jump-btn {
+    opacity: 1;
+}
+
+.surface-jump-btn:hover {
+    background: var(--background-modifier-hover);
+    color: var(--text-normal);
+}
+
+.surface-jump-btn:focus {
+    outline: none;
+}
+
+.surface-jump-btn:focus-visible {
+    opacity: 1;
+    outline: 2px solid var(--interactive-accent);
+    outline-offset: 2px;
+}
+
+/* CSS chevron indicator */
+.surface-chevron {
+    width: 8px;
+    height: 8px;
+    border-right: 1.5px solid var(--text-faint);
+    border-bottom: 1.5px solid var(--text-faint);
+    transform: rotate(-45deg);
+    flex-shrink: 0;
+    transition:
+        transform 180ms cubic-bezier(0.25, 1, 0.5, 1),
+        border-color 120ms ease;
+}
+
+.surface-chevron.is-expanded {
+    transform: rotate(45deg);
+    border-color: var(--text-muted);
+}
+
+/* Card body — grid expand/collapse animation */
+.surface-card-body {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 220ms cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.surface-card-body.is-expanded {
+    grid-template-rows: 1fr;
+}
+
+.surface-card-body-inner {
+    overflow: hidden;
+    font-size: 0.875rem;
+    color: var(--text-normal);
+}
+
+.surface-card-body.is-expanded .surface-card-body-inner {
+    padding-top: 10px;
+    border-top: 1px solid var(--background-modifier-border);
+}
+
+.surface-card-body-inner p:last-child {
+    margin-bottom: 0;
+}
+
+/* Empty state */
+.surface-empty-state {
+    text-align: center;
+    color: var(--text-faint);
+    font-size: 0.8rem;
+    padding: 40px 20px;
+    margin: 0;
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+    .surface-chevron,
+    .surface-card-body,
+    .surface-view .nav-pills .nav-link,
+    .surface-view .btn-nav-arrow,
+    .surface-jump-btn,
+    .surface-card {
+        transition-duration: 0.01ms !important;
+    }
+}

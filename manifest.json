@@ -5,6 +5,6 @@
   "minAppVersion": "0.15.0",
   "description": "Surface notes written under date headings (### Month D, YYYY) by day, week, or month.",
   "author": "misterGF",
-  "authorUrl": "https://github.com/misterGF/obsidian-surface",
+  "authorUrl": "https://github.com/misterGF",
   "isDesktopOnly": false
 }

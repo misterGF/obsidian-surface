@@ -3,7 +3,7 @@
   "name": "Surface",
   "version": "1.0.1",
   "minAppVersion": "0.15.0",
-  "description": "Surface notes written under date headings (### Month D, YYYY) by day, week, or month.",
+  "description": "Surface automatically gathers all your date-based and keyword-marked notes into one sidebar view, so your past thoughts are always easy to find.",
   "author": "misterGF",
   "authorUrl": "https://github.com/misterGF",
   "isDesktopOnly": false

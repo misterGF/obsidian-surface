@@ -18,13 +18,13 @@ export default class SurfacePlugin extends Plugin {
 
     this.registerView(VIEW_TYPE, (leaf) => new SurfaceView(leaf, this));
 
-    this.addRibbonIcon("calendar-search", "Surface", () => {
-      this.activateView();
+    this.addRibbonIcon("calendar-search", "Surface", async () => {
+      await this.activateView();
     });
 
     this.addCommand({
       id: "open-surface",
-      name: "Open Surface view",
+      name: "Open side menu",
       callback: () => this.activateView(),
     });
 
@@ -41,11 +41,15 @@ export default class SurfacePlugin extends Plugin {
   }
 
   onunload() {
-    this.app.workspace.detachLeavesOfType(VIEW_TYPE);
+    // Leaves are preserved so users keep their layout on reload
   }
 
   async loadSettings() {
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    this.settings = Object.assign(
+      {},
+      DEFAULT_SETTINGS,
+      await this.loadData() as Partial<SurfaceSettings> | null,
+    );
     // Ensure any new built-in pattern keys exist (plugin updates)
     for (const key of Object.keys(DEFAULT_SETTINGS.builtinPatterns)) {
       if (this.settings.builtinPatterns[key] === undefined) {
@@ -96,7 +100,7 @@ export default class SurfacePlugin extends Plugin {
   async activateView() {
     const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE);
     if (existing.length > 0) {
-      this.app.workspace.revealLeaf(existing[0]);
+      await this.app.workspace.revealLeaf(existing[0]);
       const view = existing[0].view;
       if (view instanceof SurfaceView) {
         await view.resetToNowAndRender();
@@ -106,7 +110,7 @@ export default class SurfacePlugin extends Plugin {
     const leaf = this.app.workspace.getRightLeaf(false);
     if (!leaf) return;
     await leaf.setViewState({ type: VIEW_TYPE, active: true });
-    this.app.workspace.revealLeaf(leaf);
+    await this.app.workspace.revealLeaf(leaf);
   }
 
   openPluginSettings() {

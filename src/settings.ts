@@ -122,9 +122,10 @@ export const BUILTIN_PATTERN_DEFS: Array<{
 ];
 
 export const DEFAULT_SETTINGS: SurfaceSettings = {
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-call
   builtinPatterns: Object.fromEntries(
-    BUILTIN_PATTERN_DEFS.map((p) => [p.id, p.id === "long-month-day-year"])
-  ),
+    BUILTIN_PATTERN_DEFS.map((p): [string, boolean] => [p.id, p.id === "long-month-day-year"])
+  ) as Record<string, boolean>,
   surfaceTerms: [],
 };
 
@@ -157,12 +158,10 @@ export class SurfaceSettingTab extends PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
 
-    containerEl.createEl("h2", { text: "Surface Settings" });
-
     // --- Built-in date patterns ---
-    containerEl.createEl("h3", { text: "Built-in date formats" });
+    new Setting(containerEl).setName("Built-in date formats").setHeading();
     containerEl.createEl("p", {
-      text: "Toggle which heading formats Surface will recognize as dates. All formats support optional ordinal suffixes (1st, 2nd, 3rd...).",
+      text: "Toggle which heading formats surface will recognize as dates. All formats support optional ordinal suffixes (1st, 2nd, 3rd...).",
       cls: "setting-item-description",
     });
 
@@ -181,9 +180,9 @@ export class SurfaceSettingTab extends PluginSettingTab {
     }
 
     // --- Surface terms ---
-    containerEl.createEl("h3", { text: "Surface terms" });
+    new Setting(containerEl).setName("Keyword terms").setHeading();
     containerEl.createEl("p", {
-      text: "Add keywords to collect from your notes. Any heading containing the term will appear in the Pinned tab. The label is shown as the group header.",
+      text: "Add keywords to collect from your notes. Any heading containing the term will appear in the pinned tab. The label is shown as the group header.",
       cls: "setting-item-description",
     });
 
@@ -193,7 +192,7 @@ export class SurfaceSettingTab extends PluginSettingTab {
 
     new Setting(containerEl).addButton((btn) =>
       btn
-        .setButtonText("+ Add term")
+        .setButtonText("+ add term")
         .setCta()
         .onClick(async () => {
           this.plugin.settings.surfaceTerms.push({

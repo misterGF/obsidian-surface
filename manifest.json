@@ -2,7 +2,7 @@
   "id": "surface-notes",
   "name": "Surface",
   "version": "1.0.2",
-  "minAppVersion": "0.15.0",
+  "minAppVersion": "1.7.2",
   "description": "Surface automatically gathers all your date-based and keyword-marked notes into one sidebar view, so your past thoughts are always easy to find.",
   "author": "misterGF",
   "authorUrl": "https://github.com/misterGF",

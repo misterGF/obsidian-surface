@@ -143,8 +143,8 @@ var SurfaceView = class extends import_obsidian.ItemView {
     this.registerDomEvent(window, "focus", () => {
       void this.syncReferenceDateToNowIfStale();
     });
-    this.registerDomEvent(document, "visibilitychange", () => {
-      if (!document.hidden) {
+    this.registerDomEvent(activeDocument, "visibilitychange", () => {
+      if (!activeDocument.hidden) {
         void this.syncReferenceDateToNowIfStale();
       }
     });
@@ -239,21 +239,24 @@ var SurfaceView = class extends import_obsidian.ItemView {
         await this.render();
       };
     }
-    navPills.addEventListener("keydown", async (e) => {
-      var _a2, _b;
+    navPills.addEventListener("keydown", (e) => {
       const currentIndex = MODES.indexOf(this.filterMode);
       if (e.key === "ArrowRight") {
         e.preventDefault();
         this.filterMode = MODES[(currentIndex + 1) % MODES.length];
         if (this.filterMode !== "pinned") this.referenceDate = /* @__PURE__ */ new Date();
-        await this.render();
-        (_a2 = this.containerEl.querySelector(".nav-link.active")) == null ? void 0 : _a2.focus();
+        void this.render().then(() => {
+          var _a2;
+          (_a2 = this.containerEl.querySelector(".nav-link.active")) == null ? void 0 : _a2.focus();
+        });
       } else if (e.key === "ArrowLeft") {
         e.preventDefault();
         this.filterMode = MODES[(currentIndex - 1 + MODES.length) % MODES.length];
         if (this.filterMode !== "pinned") this.referenceDate = /* @__PURE__ */ new Date();
-        await this.render();
-        (_b = this.containerEl.querySelector(".nav-link.active")) == null ? void 0 : _b.focus();
+        void this.render().then(() => {
+          var _a2;
+          (_a2 = this.containerEl.querySelector(".nav-link.active")) == null ? void 0 : _a2.focus();
+        });
       }
     });
     if (this.filterMode !== "pinned") {
@@ -547,6 +550,7 @@ var BUILTIN_PATTERN_DEFS = [
   }
 ];
 var DEFAULT_SETTINGS = {
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-call
   builtinPatterns: Object.fromEntries(
     BUILTIN_PATTERN_DEFS.map((p) => [p.id, p.id === "long-month-day-year"])
   ),
@@ -570,10 +574,9 @@ var SurfaceSettingTab = class extends import_obsidian2.PluginSettingTab {
   display() {
     const { containerEl } = this;
     containerEl.empty();
-    containerEl.createEl("h2", { text: "Surface Settings" });
-    containerEl.createEl("h3", { text: "Built-in date formats" });
+    new import_obsidian2.Setting(containerEl).setName("Built-in date formats").setHeading();
     containerEl.createEl("p", {
-      text: "Toggle which heading formats Surface will recognize as dates. All formats support optional ordinal suffixes (1st, 2nd, 3rd...).",
+      text: "Toggle which heading formats surface will recognize as dates. All formats support optional ordinal suffixes (1st, 2nd, 3rd...).",
       cls: "setting-item-description"
     });
     for (const def of BUILTIN_PATTERN_DEFS) {
@@ -587,16 +590,16 @@ var SurfaceSettingTab = class extends import_obsidian2.PluginSettingTab {
         }
       );
     }
-    containerEl.createEl("h3", { text: "Surface terms" });
+    new import_obsidian2.Setting(containerEl).setName("Keyword terms").setHeading();
     containerEl.createEl("p", {
-      text: "Add keywords to collect from your notes. Any heading containing the term will appear in the Pinned tab. The label is shown as the group header.",
+      text: "Add keywords to collect from your notes. Any heading containing the term will appear in the pinned tab. The label is shown as the group header.",
       cls: "setting-item-description"
     });
     for (let i = 0; i < this.plugin.settings.surfaceTerms.length; i++) {
       this.renderTermRow(containerEl, i);
     }
     new import_obsidian2.Setting(containerEl).addButton(
-      (btn) => btn.setButtonText("+ Add term").setCta().onClick(async () => {
+      (btn) => btn.setButtonText("+ add term").setCta().onClick(async () => {
         this.plugin.settings.surfaceTerms.push({
           id: `term-${Date.now()}`,
           label: "",
@@ -658,12 +661,12 @@ var SurfacePlugin = class extends import_obsidian3.Plugin {
   async onload() {
     await this.loadSettings();
     this.registerView(VIEW_TYPE, (leaf) => new SurfaceView(leaf, this));
-    this.addRibbonIcon("calendar-search", "Surface", () => {
-      this.activateView();
+    this.addRibbonIcon("calendar-search", "Surface", async () => {
+      await this.activateView();
     });
     this.addCommand({
       id: "open-surface",
-      name: "Open Surface view",
+      name: "Open side menu",
       callback: () => this.activateView()
     });
     this.addSettingTab(new SurfaceSettingTab(this.app, this));
@@ -676,10 +679,13 @@ var SurfacePlugin = class extends import_obsidian3.Plugin {
     this.registerEvent(this.app.vault.on("delete", invalidate));
   }
   onunload() {
-    this.app.workspace.detachLeavesOfType(VIEW_TYPE);
   }
   async loadSettings() {
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    this.settings = Object.assign(
+      {},
+      DEFAULT_SETTINGS,
+      await this.loadData()
+    );
     for (const key of Object.keys(DEFAULT_SETTINGS.builtinPatterns)) {
       if (this.settings.builtinPatterns[key] === void 0) {
         this.settings.builtinPatterns[key] = DEFAULT_SETTINGS.builtinPatterns[key];
@@ -720,7 +726,7 @@ var SurfacePlugin = class extends import_obsidian3.Plugin {
   async activateView() {
     const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE);
     if (existing.length > 0) {
-      this.app.workspace.revealLeaf(existing[0]);
+      await this.app.workspace.revealLeaf(existing[0]);
       const view = existing[0].view;
       if (view instanceof SurfaceView) {
         await view.resetToNowAndRender();
@@ -730,7 +736,7 @@ var SurfacePlugin = class extends import_obsidian3.Plugin {
     const leaf = this.app.workspace.getRightLeaf(false);
     if (!leaf) return;
     await leaf.setViewState({ type: VIEW_TYPE, active: true });
-    this.app.workspace.revealLeaf(leaf);
+    await this.app.workspace.revealLeaf(leaf);
   }
   openPluginSettings() {
     var _a, _b, _c, _d;

@@ -39,8 +39,8 @@ export class SurfaceView extends ItemView {
       void this.syncReferenceDateToNowIfStale();
     });
 
-    this.registerDomEvent(document, "visibilitychange", () => {
-      if (!document.hidden) {
+    this.registerDomEvent(activeDocument, "visibilitychange", () => {
+      if (!activeDocument.hidden) {
         void this.syncReferenceDateToNowIfStale();
       }
     });
@@ -149,20 +149,22 @@ export class SurfaceView extends ItemView {
     }
 
     // Keyboard navigation for the tab bar
-    navPills.addEventListener("keydown", async (e: KeyboardEvent) => {
+    navPills.addEventListener("keydown", (e: KeyboardEvent) => {
       const currentIndex = MODES.indexOf(this.filterMode);
       if (e.key === "ArrowRight") {
         e.preventDefault();
         this.filterMode = MODES[(currentIndex + 1) % MODES.length];
         if (this.filterMode !== "pinned") this.referenceDate = new Date();
-        await this.render();
-        (this.containerEl.querySelector(".nav-link.active") as HTMLElement)?.focus();
+        void this.render().then(() => {
+          (this.containerEl.querySelector(".nav-link.active") as HTMLElement)?.focus();
+        });
       } else if (e.key === "ArrowLeft") {
         e.preventDefault();
         this.filterMode = MODES[(currentIndex - 1 + MODES.length) % MODES.length];
         if (this.filterMode !== "pinned") this.referenceDate = new Date();
-        await this.render();
-        (this.containerEl.querySelector(".nav-link.active") as HTMLElement)?.focus();
+        void this.render().then(() => {
+          (this.containerEl.querySelector(".nav-link.active") as HTMLElement)?.focus();
+        });
       }
     });
 

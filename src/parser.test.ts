@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { parseEntries, isSameWeek } from "./parser";
 import type { ActivePattern } from "./settings";
 
-test("parseEntries rejects invalid calendar dates", () => {
+test("parseEntries rejects invalid calendar dates", async () => {
   const patterns: ActivePattern[] = [
     {
       regex: /^(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2})(?:st|nd|rd|th)?,\s+(\d{4})$/i,
@@ -52,16 +52,16 @@ test("parseEntries rejects invalid calendar dates", () => {
     "good",
   ].join("\n");
 
-  const entries = parseEntries(content, "note.md", patterns);
+  const entries = await parseEntries(content, "note.md", patterns);
   assert.equal(entries.length, 1);
   assert.equal(entries[0].headingText, "### April 30, 2026");
 });
 
-test("isSameWeek uses Monday as week start", () => {
+test("isSameWeek uses Monday as week start", async () => {
   const monday = new Date(2026, 4, 11); // Mon
   const sundayBefore = new Date(2026, 4, 10); // Sun
   const sundayAfter = new Date(2026, 4, 17); // Sun
 
-  assert.equal(isSameWeek(monday, sundayBefore), false);
-  assert.equal(isSameWeek(monday, sundayAfter), true);
+  await assert.equal(isSameWeek(monday, sundayBefore), false);
+  await assert.equal(isSameWeek(monday, sundayAfter), true);
 });

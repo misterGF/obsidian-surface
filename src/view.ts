@@ -179,7 +179,7 @@ export class SurfaceView extends ItemView {
       prevBtn.createDiv("arrow-icon");
       prevBtn.onclick = () => this.shiftDate(-1);
 
-      navRow.createEl("span", { cls: "surface-date-label", text: this.formatLabel() });
+      navRow.createSpan({ cls: "surface-date-label", text: this.formatLabel() });
 
       const nextBtn = navRow.createEl("button", {
         cls: "btn-nav-arrow next",
@@ -299,9 +299,9 @@ export class SurfaceView extends ItemView {
     const summary = card.createDiv("surface-card-summary");
 
     const info = summary.createDiv("surface-card-info");
-    info.createEl("span", { cls: "surface-card-title", text: fileName });
+    info.createSpan({ cls: "surface-card-title", text: fileName });
     if (preview) {
-      info.createEl("span", { cls: "surface-card-preview", text: preview });
+      info.createSpan({ cls: "surface-card-preview", text: preview });
     }
 
     // CSS chevron

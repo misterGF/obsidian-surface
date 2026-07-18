@@ -23,7 +23,7 @@ export default class SurfacePlugin extends Plugin {
     });
 
     this.addCommand({
-      id: "open-surface",
+      id: "open-side-menu",
       name: "Open side menu",
       callback: () => this.activateView(),
     });
@@ -45,11 +45,8 @@ export default class SurfacePlugin extends Plugin {
   }
 
   async loadSettings() {
-    this.settings = Object.assign(
-      {},
-      DEFAULT_SETTINGS,
-      await this.loadData() as Partial<SurfaceSettings> | null,
-    );
+    const saved = (await this.loadData()) as Partial<SurfaceSettings> | null;
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, saved ?? {});
     // Ensure any new built-in pattern keys exist (plugin updates)
     for (const key of Object.keys(DEFAULT_SETTINGS.builtinPatterns)) {
       if (this.settings.builtinPatterns[key] === undefined) {

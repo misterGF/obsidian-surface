@@ -11,7 +11,11 @@ export default defineConfig([
       parser: tsparser,
       parserOptions: { project: "./tsconfig.json" },
     },
-    rules: {},
+    rules: {
+      "@typescript-eslint/no-floating-promises": "warn",
+      "@typescript-eslint/no-misused-promises": "warn",
+      "@typescript-eslint/no-unsafe-assignment": "warn",
+    },
   },
   {
     files: ["**/*.test.ts"],

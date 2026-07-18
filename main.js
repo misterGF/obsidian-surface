@@ -267,7 +267,7 @@ var SurfaceView = class extends import_obsidian.ItemView {
       });
       prevBtn.createDiv("arrow-icon");
       prevBtn.onclick = () => this.shiftDate(-1);
-      navRow.createEl("span", { cls: "surface-date-label", text: this.formatLabel() });
+      navRow.createSpan({ cls: "surface-date-label", text: this.formatLabel() });
       const nextBtn = navRow.createEl("button", {
         cls: "btn-nav-arrow next",
         attr: { "aria-label": "Next period" }
@@ -363,9 +363,9 @@ var SurfaceView = class extends import_obsidian.ItemView {
     const card = container.createDiv("surface-card");
     const summary = card.createDiv("surface-card-summary");
     const info = summary.createDiv("surface-card-info");
-    info.createEl("span", { cls: "surface-card-title", text: fileName });
+    info.createSpan({ cls: "surface-card-title", text: fileName });
     if (preview) {
-      info.createEl("span", { cls: "surface-card-preview", text: preview });
+      info.createSpan({ cls: "surface-card-preview", text: preview });
     }
     const chevron = summary.createDiv("surface-chevron");
     chevron.setAttribute("aria-hidden", "true");
@@ -665,7 +665,7 @@ var SurfacePlugin = class extends import_obsidian3.Plugin {
       await this.activateView();
     });
     this.addCommand({
-      id: "open-surface",
+      id: "open-side-menu",
       name: "Open side menu",
       callback: () => this.activateView()
     });
@@ -681,11 +681,8 @@ var SurfacePlugin = class extends import_obsidian3.Plugin {
   onunload() {
   }
   async loadSettings() {
-    this.settings = Object.assign(
-      {},
-      DEFAULT_SETTINGS,
-      await this.loadData()
-    );
+    const saved = await this.loadData();
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, saved != null ? saved : {});
     for (const key of Object.keys(DEFAULT_SETTINGS.builtinPatterns)) {
       if (this.settings.builtinPatterns[key] === void 0) {
         this.settings.builtinPatterns[key] = DEFAULT_SETTINGS.builtinPatterns[key];

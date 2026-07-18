@@ -1,4 +1,10 @@
-import { App, PluginSettingTab, Setting } from "obsidian";
+import {
+  App,
+  PluginSettingTab,
+  Setting,
+  type SettingDefinitionItem,
+  type SettingGroupItem,
+} from "obsidian";
 import type SurfacePlugin from "./main";
 
 // Runtime pattern used by the parser
@@ -122,10 +128,9 @@ export const BUILTIN_PATTERN_DEFS: Array<{
 ];
 
 export const DEFAULT_SETTINGS: SurfaceSettings = {
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-call
   builtinPatterns: Object.fromEntries(
     BUILTIN_PATTERN_DEFS.map((p): [string, boolean] => [p.id, p.id === "long-month-day-year"])
-  ) as Record<string, boolean>,
+  ),
   surfaceTerms: [],
 };
 
@@ -154,71 +159,90 @@ export class SurfaceSettingTab extends PluginSettingTab {
     this.plugin = plugin;
   }
 
-  display(): void {
-    const { containerEl } = this;
-    containerEl.empty();
+  getSettingDefinitions(): SettingDefinitionItem[] {
+    return [
+      {
+        type: "group",
+        heading: "Built-in date formats",
+        items: [
+          {
+            name: "",
+            desc: "Toggle which heading formats surface will recognize as dates. All formats support optional ordinal suffixes (1st, 2nd, 3rd...).",
+            searchable: false,
+          },
+          ...BUILTIN_PATTERN_DEFS.map((def): SettingGroupItem => ({
+            name: def.label,
+            desc: `Example: ${def.example}`,
+            control: { type: "toggle", key: `pattern:${def.id}` },
+          })),
+        ],
+      },
+      {
+        type: "list",
+        heading: "Keyword terms",
+        emptyState:
+          "Any heading containing a term will appear in the pinned tab. The label is shown as the group header.",
+        addItem: {
+          name: "Add term",
+          action: () => {
+            this.plugin.settings.surfaceTerms.push({
+              id: `term-${Date.now()}`,
+              label: "",
+              term: "",
+            });
+            void this.plugin.saveSettings();
+            this.update();
+          },
+        },
+        onDelete: (index) => {
+          this.plugin.settings.surfaceTerms.splice(index, 1);
+          void this.plugin.saveSettings();
+          this.update();
+        },
+        onReorder: (oldIndex, newIndex) => {
+          const terms = this.plugin.settings.surfaceTerms;
+          const [moved] = terms.splice(oldIndex, 1);
+          terms.splice(newIndex, 0, moved);
+          void this.plugin.saveSettings();
+        },
+        items: this.plugin.settings.surfaceTerms.map((t, index) => ({
+          name: t.label || t.term || "New term",
+          aliases: t.term ? [t.term] : undefined,
+          render: (setting: Setting) => {
+            this.addTermInputs(setting, index);
+          },
+        })),
+      },
+    ];
+  }
 
-    // --- Built-in date patterns ---
-    new Setting(containerEl).setName("Built-in date formats").setHeading();
-    containerEl.createEl("p", {
-      text: "Toggle which heading formats surface will recognize as dates. All formats support optional ordinal suffixes (1st, 2nd, 3rd...).",
-      cls: "setting-item-description",
-    });
-
-    for (const def of BUILTIN_PATTERN_DEFS) {
-      new Setting(containerEl)
-        .setName(def.label)
-        .setDesc(`Example: ${def.example}`)
-        .addToggle((toggle) =>
-          toggle
-            .setValue(this.plugin.settings.builtinPatterns[def.id] ?? false)
-            .onChange(async (value) => {
-              this.plugin.settings.builtinPatterns[def.id] = value;
-              await this.plugin.saveSettings();
-            })
-        );
+  getControlValue(key: string): unknown {
+    if (key.startsWith("pattern:")) {
+      return this.plugin.settings.builtinPatterns[key.slice("pattern:".length)] ?? false;
     }
+    return undefined;
+  }
 
-    // --- Surface terms ---
-    new Setting(containerEl).setName("Keyword terms").setHeading();
-    containerEl.createEl("p", {
-      text: "Add keywords to collect from your notes. Any heading containing the term will appear in the pinned tab. The label is shown as the group header.",
-      cls: "setting-item-description",
-    });
-
-    for (let i = 0; i < this.plugin.settings.surfaceTerms.length; i++) {
-      this.renderTermRow(containerEl, i);
+  async setControlValue(key: string, value: unknown): Promise<void> {
+    if (key.startsWith("pattern:")) {
+      this.plugin.settings.builtinPatterns[key.slice("pattern:".length)] = value === true;
+      await this.plugin.saveSettings();
     }
-
-    new Setting(containerEl).addButton((btn) =>
-      btn
-        .setButtonText("+ add term")
-        .setCta()
-        .onClick(async () => {
-          this.plugin.settings.surfaceTerms.push({
-            id: `term-${Date.now()}`,
-            label: "",
-            term: "",
-          });
-          await this.plugin.saveSettings();
-          this.display();
-        })
-    );
   }
 
   hide(): void {
     this.flushDebouncedSave();
   }
 
-  private renderTermRow(containerEl: HTMLElement, index: number): void {
+  private addTermInputs(setting: Setting, index: number): void {
     const t = this.plugin.settings.surfaceTerms[index];
 
-    new Setting(containerEl)
+    setting
       .addText((text) =>
         text
           .setPlaceholder("Label (e.g. Important)")
           .setValue(t.label)
-          .onChange(async (value) => {
+          .onChange((value) => {
             this.plugin.settings.surfaceTerms[index].label = value;
             this.scheduleSave();
           })
@@ -227,19 +251,9 @@ export class SurfaceSettingTab extends PluginSettingTab {
         text
           .setPlaceholder("Term to match (e.g. Important)")
           .setValue(t.term)
-          .onChange(async (value) => {
+          .onChange((value) => {
             this.plugin.settings.surfaceTerms[index].term = value;
             this.scheduleSave();
-          })
-      )
-      .addButton((btn) =>
-        btn
-          .setIcon("trash")
-          .setTooltip("Remove term")
-          .onClick(async () => {
-            this.plugin.settings.surfaceTerms.splice(index, 1);
-            await this.plugin.saveSettings();
-            this.display();
           })
       );
   }

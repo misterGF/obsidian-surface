@@ -550,7 +550,6 @@ var BUILTIN_PATTERN_DEFS = [
   }
 ];
 var DEFAULT_SETTINGS = {
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-call
   builtinPatterns: Object.fromEntries(
     BUILTIN_PATTERN_DEFS.map((p) => [p.id, p.id === "long-month-day-year"])
   ),
@@ -571,65 +570,88 @@ var SurfaceSettingTab = class extends import_obsidian2.PluginSettingTab {
     this.saveTimer = null;
     this.plugin = plugin;
   }
-  display() {
-    const { containerEl } = this;
-    containerEl.empty();
-    new import_obsidian2.Setting(containerEl).setName("Built-in date formats").setHeading();
-    containerEl.createEl("p", {
-      text: "Toggle which heading formats surface will recognize as dates. All formats support optional ordinal suffixes (1st, 2nd, 3rd...).",
-      cls: "setting-item-description"
-    });
-    for (const def of BUILTIN_PATTERN_DEFS) {
-      new import_obsidian2.Setting(containerEl).setName(def.label).setDesc(`Example: ${def.example}`).addToggle(
-        (toggle) => {
-          var _a;
-          return toggle.setValue((_a = this.plugin.settings.builtinPatterns[def.id]) != null ? _a : false).onChange(async (value) => {
-            this.plugin.settings.builtinPatterns[def.id] = value;
-            await this.plugin.saveSettings();
-          });
-        }
-      );
+  getSettingDefinitions() {
+    return [
+      {
+        type: "group",
+        heading: "Built-in date formats",
+        items: [
+          {
+            name: "",
+            desc: "Toggle which heading formats surface will recognize as dates. All formats support optional ordinal suffixes (1st, 2nd, 3rd...).",
+            searchable: false
+          },
+          ...BUILTIN_PATTERN_DEFS.map((def) => ({
+            name: def.label,
+            desc: `Example: ${def.example}`,
+            control: { type: "toggle", key: `pattern:${def.id}` }
+          }))
+        ]
+      },
+      {
+        type: "list",
+        heading: "Keyword terms",
+        emptyState: "Any heading containing a term will appear in the pinned tab. The label is shown as the group header.",
+        addItem: {
+          name: "Add term",
+          action: () => {
+            this.plugin.settings.surfaceTerms.push({
+              id: `term-${Date.now()}`,
+              label: "",
+              term: ""
+            });
+            void this.plugin.saveSettings();
+            this.update();
+          }
+        },
+        onDelete: (index) => {
+          this.plugin.settings.surfaceTerms.splice(index, 1);
+          void this.plugin.saveSettings();
+          this.update();
+        },
+        onReorder: (oldIndex, newIndex) => {
+          const terms = this.plugin.settings.surfaceTerms;
+          const [moved] = terms.splice(oldIndex, 1);
+          terms.splice(newIndex, 0, moved);
+          void this.plugin.saveSettings();
+        },
+        items: this.plugin.settings.surfaceTerms.map((t, index) => ({
+          name: t.label || t.term || "New term",
+          aliases: t.term ? [t.term] : void 0,
+          render: (setting) => {
+            this.addTermInputs(setting, index);
+          }
+        }))
+      }
+    ];
+  }
+  getControlValue(key) {
+    var _a;
+    if (key.startsWith("pattern:")) {
+      return (_a = this.plugin.settings.builtinPatterns[key.slice("pattern:".length)]) != null ? _a : false;
     }
-    new import_obsidian2.Setting(containerEl).setName("Keyword terms").setHeading();
-    containerEl.createEl("p", {
-      text: "Add keywords to collect from your notes. Any heading containing the term will appear in the pinned tab. The label is shown as the group header.",
-      cls: "setting-item-description"
-    });
-    for (let i = 0; i < this.plugin.settings.surfaceTerms.length; i++) {
-      this.renderTermRow(containerEl, i);
+    return void 0;
+  }
+  async setControlValue(key, value) {
+    if (key.startsWith("pattern:")) {
+      this.plugin.settings.builtinPatterns[key.slice("pattern:".length)] = value === true;
+      await this.plugin.saveSettings();
     }
-    new import_obsidian2.Setting(containerEl).addButton(
-      (btn) => btn.setButtonText("+ add term").setCta().onClick(async () => {
-        this.plugin.settings.surfaceTerms.push({
-          id: `term-${Date.now()}`,
-          label: "",
-          term: ""
-        });
-        await this.plugin.saveSettings();
-        this.display();
-      })
-    );
   }
   hide() {
     this.flushDebouncedSave();
   }
-  renderTermRow(containerEl, index) {
+  addTermInputs(setting, index) {
     const t = this.plugin.settings.surfaceTerms[index];
-    new import_obsidian2.Setting(containerEl).addText(
-      (text) => text.setPlaceholder("Label (e.g. Important)").setValue(t.label).onChange(async (value) => {
+    setting.addText(
+      (text) => text.setPlaceholder("Label (e.g. Important)").setValue(t.label).onChange((value) => {
         this.plugin.settings.surfaceTerms[index].label = value;
         this.scheduleSave();
       })
     ).addText(
-      (text) => text.setPlaceholder("Term to match (e.g. Important)").setValue(t.term).onChange(async (value) => {
+      (text) => text.setPlaceholder("Term to match (e.g. Important)").setValue(t.term).onChange((value) => {
         this.plugin.settings.surfaceTerms[index].term = value;
         this.scheduleSave();
-      })
-    ).addButton(
-      (btn) => btn.setIcon("trash").setTooltip("Remove term").onClick(async () => {
-        this.plugin.settings.surfaceTerms.splice(index, 1);
-        await this.plugin.saveSettings();
-        this.display();
       })
     );
   }

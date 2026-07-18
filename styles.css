@@ -329,6 +329,6 @@
     .surface-view .btn-nav-arrow,
     .surface-jump-btn,
     .surface-card {
-        transition-duration: 0.01ms !important;
+        transition-duration: 0.01ms;
     }
 }

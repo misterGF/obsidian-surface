@@ -9,7 +9,7 @@ import {
 } from "./settings";
 
 export default class SurfacePlugin extends Plugin {
-  settings: SurfaceSettings;
+  settings!: SurfaceSettings;
   private entriesCache: DateEntry[] | null = null;
   private termEntriesCache: TermEntry[] | null = null;
 

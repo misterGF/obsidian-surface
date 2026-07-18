@@ -1,6 +1,7 @@
 {
   "compilerOptions": {
-    "baseUrl": ".",
+    "skipLibCheck": true,
+    "types": ["node"],
     "inlineSourceMap": true,
     "inlineSources": true,
     "module": "ESNext",
@@ -10,7 +11,7 @@
     "importHelpers": true,
     "isolatedModules": true,
     "strictNullChecks": true,
-    "lib": ["ES6", "DOM"]
+    "lib": ["ES2019", "DOM"]
   },
   "include": ["src/**/*.ts"]
 }

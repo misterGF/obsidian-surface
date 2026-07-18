@@ -1,6 +1,6 @@
 {
   "name": "obsidian-surface",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Surface notes written under date headings (### Month D, YYYY) by day, week, or month.",
   "main": "index.js",
   "scripts": {

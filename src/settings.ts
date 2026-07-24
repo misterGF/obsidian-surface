@@ -230,6 +230,92 @@ export class SurfaceSettingTab extends PluginSettingTab {
     }
   }
 
+  // Fallback for Obsidian < 1.13.0, which has no declarative settings API.
+  // Ignored on 1.13+ since getSettingDefinitions() renders instead.
+  display(): void {
+    const { containerEl } = this;
+    containerEl.empty();
+
+    new Setting(containerEl).setName("Built-in date formats").setHeading();
+    new Setting(containerEl).setDesc(
+      "Toggle which heading formats surface will recognize as dates. All formats support optional ordinal suffixes (1st, 2nd, 3rd...)."
+    );
+
+    for (const def of BUILTIN_PATTERN_DEFS) {
+      new Setting(containerEl)
+        .setName(def.label)
+        .setDesc(`Example: ${def.example}`)
+        .addToggle((toggle) =>
+          toggle
+            .setValue(this.plugin.settings.builtinPatterns[def.id] ?? false)
+            .onChange(async (value) => {
+              this.plugin.settings.builtinPatterns[def.id] = value;
+              await this.plugin.saveSettings();
+            })
+        );
+    }
+
+    new Setting(containerEl).setName("Keyword terms").setHeading();
+
+    const terms = this.plugin.settings.surfaceTerms;
+    if (terms.length === 0) {
+      new Setting(containerEl).setDesc(
+        "Any heading containing a term will appear in the pinned tab. The label is shown as the group header."
+      );
+    }
+
+    terms.forEach((_, index) => {
+      const setting = new Setting(containerEl);
+      this.addTermInputs(setting, index);
+      setting
+        .addExtraButton((btn) =>
+          btn
+            .setIcon("arrow-up")
+            .setTooltip("Move up")
+            .setDisabled(index === 0)
+            .onClick(async () => {
+              const [moved] = terms.splice(index, 1);
+              terms.splice(index - 1, 0, moved);
+              await this.plugin.saveSettings();
+              this.display();
+            })
+        )
+        .addExtraButton((btn) =>
+          btn
+            .setIcon("arrow-down")
+            .setTooltip("Move down")
+            .setDisabled(index === terms.length - 1)
+            .onClick(async () => {
+              const [moved] = terms.splice(index, 1);
+              terms.splice(index + 1, 0, moved);
+              await this.plugin.saveSettings();
+              this.display();
+            })
+        )
+        .addExtraButton((btn) =>
+          btn
+            .setIcon("trash")
+            .setTooltip("Delete")
+            .onClick(async () => {
+              terms.splice(index, 1);
+              await this.plugin.saveSettings();
+              this.display();
+            })
+        );
+    });
+
+    new Setting(containerEl).addButton((btn) =>
+      btn
+        .setButtonText("Add term")
+        .setCta()
+        .onClick(async () => {
+          terms.push({ id: `term-${Date.now()}`, label: "", term: "" });
+          await this.plugin.saveSettings();
+          this.display();
+        })
+    );
+  }
+
   hide(): void {
     this.flushDebouncedSave();
   }

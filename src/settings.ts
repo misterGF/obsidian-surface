@@ -1,6 +1,7 @@
 import {
   App,
   PluginSettingTab,
+  requireApiVersion,
   Setting,
   type SettingDefinitionItem,
   type SettingGroupItem,
@@ -191,13 +192,13 @@ export class SurfaceSettingTab extends PluginSettingTab {
               term: "",
             });
             void this.plugin.saveSettings();
-            this.update();
+            this.refreshDeclarativeList();
           },
         },
         onDelete: (index) => {
           this.plugin.settings.surfaceTerms.splice(index, 1);
           void this.plugin.saveSettings();
-          this.update();
+          this.refreshDeclarativeList();
         },
         onReorder: (oldIndex, newIndex) => {
           const terms = this.plugin.settings.surfaceTerms;
@@ -230,9 +231,18 @@ export class SurfaceSettingTab extends PluginSettingTab {
     }
   }
 
+  private refreshDeclarativeList(): void {
+    if (requireApiVersion("1.13.0")) {
+      this.update();
+    }
+  }
+
   // Fallback for Obsidian < 1.13.0, which has no declarative settings API.
-  // Ignored on 1.13+ since getSettingDefinitions() renders instead.
   display(): void {
+    this.renderLegacy();
+  }
+
+  private renderLegacy(): void {
     const { containerEl } = this;
     containerEl.empty();
 
@@ -277,7 +287,7 @@ export class SurfaceSettingTab extends PluginSettingTab {
               const [moved] = terms.splice(index, 1);
               terms.splice(index - 1, 0, moved);
               await this.plugin.saveSettings();
-              this.display();
+              this.renderLegacy();
             })
         )
         .addExtraButton((btn) =>
@@ -289,7 +299,7 @@ export class SurfaceSettingTab extends PluginSettingTab {
               const [moved] = terms.splice(index, 1);
               terms.splice(index + 1, 0, moved);
               await this.plugin.saveSettings();
-              this.display();
+              this.renderLegacy();
             })
         )
         .addExtraButton((btn) =>
@@ -299,7 +309,7 @@ export class SurfaceSettingTab extends PluginSettingTab {
             .onClick(async () => {
               terms.splice(index, 1);
               await this.plugin.saveSettings();
-              this.display();
+              this.renderLegacy();
             })
         );
     });
@@ -311,7 +321,7 @@ export class SurfaceSettingTab extends PluginSettingTab {
         .onClick(async () => {
           terms.push({ id: `term-${Date.now()}`, label: "", term: "" });
           await this.plugin.saveSettings();
-          this.display();
+          this.renderLegacy();
         })
     );
   }

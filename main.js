@@ -601,13 +601,13 @@ var SurfaceSettingTab = class extends import_obsidian2.PluginSettingTab {
               term: ""
             });
             void this.plugin.saveSettings();
-            this.update();
+            this.refreshDeclarativeList();
           }
         },
         onDelete: (index) => {
           this.plugin.settings.surfaceTerms.splice(index, 1);
           void this.plugin.saveSettings();
-          this.update();
+          this.refreshDeclarativeList();
         },
         onReorder: (oldIndex, newIndex) => {
           const terms = this.plugin.settings.surfaceTerms;
@@ -637,6 +637,73 @@ var SurfaceSettingTab = class extends import_obsidian2.PluginSettingTab {
       this.plugin.settings.builtinPatterns[key.slice("pattern:".length)] = value === true;
       await this.plugin.saveSettings();
     }
+  }
+  refreshDeclarativeList() {
+    if ((0, import_obsidian2.requireApiVersion)("1.13.0")) {
+      this.update();
+    }
+  }
+  // Fallback for Obsidian < 1.13.0, which has no declarative settings API.
+  display() {
+    this.renderLegacy();
+  }
+  renderLegacy() {
+    const { containerEl } = this;
+    containerEl.empty();
+    new import_obsidian2.Setting(containerEl).setName("Built-in date formats").setHeading();
+    new import_obsidian2.Setting(containerEl).setDesc(
+      "Toggle which heading formats surface will recognize as dates. All formats support optional ordinal suffixes (1st, 2nd, 3rd...)."
+    );
+    for (const def of BUILTIN_PATTERN_DEFS) {
+      new import_obsidian2.Setting(containerEl).setName(def.label).setDesc(`Example: ${def.example}`).addToggle(
+        (toggle) => {
+          var _a;
+          return toggle.setValue((_a = this.plugin.settings.builtinPatterns[def.id]) != null ? _a : false).onChange(async (value) => {
+            this.plugin.settings.builtinPatterns[def.id] = value;
+            await this.plugin.saveSettings();
+          });
+        }
+      );
+    }
+    new import_obsidian2.Setting(containerEl).setName("Keyword terms").setHeading();
+    const terms = this.plugin.settings.surfaceTerms;
+    if (terms.length === 0) {
+      new import_obsidian2.Setting(containerEl).setDesc(
+        "Any heading containing a term will appear in the pinned tab. The label is shown as the group header."
+      );
+    }
+    terms.forEach((_, index) => {
+      const setting = new import_obsidian2.Setting(containerEl);
+      this.addTermInputs(setting, index);
+      setting.addExtraButton(
+        (btn) => btn.setIcon("arrow-up").setTooltip("Move up").setDisabled(index === 0).onClick(async () => {
+          const [moved] = terms.splice(index, 1);
+          terms.splice(index - 1, 0, moved);
+          await this.plugin.saveSettings();
+          this.renderLegacy();
+        })
+      ).addExtraButton(
+        (btn) => btn.setIcon("arrow-down").setTooltip("Move down").setDisabled(index === terms.length - 1).onClick(async () => {
+          const [moved] = terms.splice(index, 1);
+          terms.splice(index + 1, 0, moved);
+          await this.plugin.saveSettings();
+          this.renderLegacy();
+        })
+      ).addExtraButton(
+        (btn) => btn.setIcon("trash").setTooltip("Delete").onClick(async () => {
+          terms.splice(index, 1);
+          await this.plugin.saveSettings();
+          this.renderLegacy();
+        })
+      );
+    });
+    new import_obsidian2.Setting(containerEl).addButton(
+      (btn) => btn.setButtonText("Add term").setCta().onClick(async () => {
+        terms.push({ id: `term-${Date.now()}`, label: "", term: "" });
+        await this.plugin.saveSettings();
+        this.renderLegacy();
+      })
+    );
   }
   hide() {
     this.flushDebouncedSave();

@@ -25,15 +25,48 @@ module.exports = __toCommonJS(main_exports);
 var import_obsidian3 = require("obsidian");
 
 // src/view.ts
-var import_obsidian = require("obsidian");
+var import_obsidian2 = require("obsidian");
 
 // src/parser.ts
 var HEADING_RE = /^(#{1,6})\s+(.+?)\s*$/;
+var FENCE_RE = /^ {0,3}(`{3,}|~{3,})/;
+function computeMaskedLines(lines) {
+  var _a;
+  const masked = new Array(lines.length).fill(false);
+  let i = 0;
+  if (((_a = lines[0]) == null ? void 0 : _a.trim()) === "---") {
+    masked[0] = true;
+    i = 1;
+    while (i < lines.length) {
+      masked[i] = true;
+      const t = lines[i].trim();
+      i++;
+      if (t === "---" || t === "...") break;
+    }
+  }
+  let openFence = null;
+  for (; i < lines.length; i++) {
+    const m = lines[i].match(FENCE_RE);
+    if (openFence === null) {
+      if (m) {
+        openFence = m[1];
+        masked[i] = true;
+      }
+    } else {
+      masked[i] = true;
+      const closes = m !== null && m[1][0] === openFence[0] && m[1].length >= openFence.length && lines[i].trim() === m[1];
+      if (closes) openFence = null;
+    }
+  }
+  return masked;
+}
 function parseEntries(content, filePath, patterns) {
   if (patterns.length === 0) return [];
   const lines = content.split("\n");
+  const masked = computeMaskedLines(lines);
   const entries = [];
   for (let i = 0; i < lines.length; i++) {
+    if (masked[i]) continue;
     const headingMatch = lines[i].match(HEADING_RE);
     if (!headingMatch) continue;
     const [, hashes, headingText] = headingMatch;
@@ -50,7 +83,7 @@ function parseEntries(content, filePath, patterns) {
     entries.push({
       date,
       headingText: lines[i].trim(),
-      content: collectContent(lines, i, hashes.length),
+      content: collectContent(lines, i, hashes.length, masked),
       filePath,
       lineNumber: i + 1
     });
@@ -60,8 +93,10 @@ function parseEntries(content, filePath, patterns) {
 function parseTermEntries(content, filePath, terms) {
   if (terms.length === 0) return [];
   const lines = content.split("\n");
+  const masked = computeMaskedLines(lines);
   const entries = [];
   for (let i = 0; i < lines.length; i++) {
+    if (masked[i]) continue;
     const headingMatch = lines[i].match(HEADING_RE);
     if (!headingMatch) continue;
     const [, hashes, headingText] = headingMatch;
@@ -70,7 +105,7 @@ function parseTermEntries(content, filePath, terms) {
       if (!t.term || !lower.includes(t.term.toLowerCase())) continue;
       entries.push({
         headingText: lines[i].trim(),
-        content: collectContent(lines, i, hashes.length),
+        content: collectContent(lines, i, hashes.length, masked),
         filePath,
         lineNumber: i + 1,
         termId: t.id,
@@ -81,12 +116,14 @@ function parseTermEntries(content, filePath, terms) {
   }
   return entries;
 }
-function collectContent(lines, headingIndex, level) {
+function collectContent(lines, headingIndex, level, masked) {
   const out = [];
   let j = headingIndex + 1;
   while (j < lines.length) {
-    const next = lines[j].match(/^(#{1,6})\s/);
-    if (next && next[1].length <= level) break;
+    if (!masked[j]) {
+      const next = lines[j].match(/^(#{1,6})\s/);
+      if (next && next[1].length <= level) break;
+    }
     out.push(lines[j]);
     j++;
   }
@@ -109,344 +146,10 @@ function isSameMonth(a, b) {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth();
 }
 
-// src/view.ts
-var VIEW_TYPE = "surface-view";
-var MODES = ["day", "week", "month", "pinned"];
-var MODE_LABELS = {
-  day: "Day",
-  week: "Week",
-  month: "Month",
-  pinned: "Pinned"
-};
-var SurfaceView = class extends import_obsidian.ItemView {
-  constructor(leaf, plugin) {
-    super(leaf);
-    this.filterMode = "day";
-    this.referenceDate = /* @__PURE__ */ new Date();
-    this.rendering = false;
-    this.renderRequested = false;
-    this.autoRefreshIntervalId = null;
-    this.plugin = plugin;
-    this.component = new import_obsidian.Component();
-  }
-  getViewType() {
-    return VIEW_TYPE;
-  }
-  getDisplayText() {
-    return "Surface";
-  }
-  getIcon() {
-    return "calendar-search";
-  }
-  async onOpen() {
-    this.component.load();
-    this.registerDomEvent(window, "focus", () => {
-      void this.syncReferenceDateToNowIfStale();
-    });
-    this.registerDomEvent(activeDocument, "visibilitychange", () => {
-      if (!activeDocument.hidden) {
-        void this.syncReferenceDateToNowIfStale();
-      }
-    });
-    this.autoRefreshIntervalId = window.setInterval(() => {
-      void this.syncReferenceDateToNowIfStale();
-    }, 6e4);
-    await this.render();
-  }
-  async onClose() {
-    if (this.autoRefreshIntervalId !== null) {
-      window.clearInterval(this.autoRefreshIntervalId);
-      this.autoRefreshIntervalId = null;
-    }
-    this.component.unload();
-  }
-  async resetToNowAndRender() {
-    this.referenceDate = /* @__PURE__ */ new Date();
-    await this.render();
-  }
-  async shiftDate(direction) {
-    const d = new Date(this.referenceDate);
-    if (this.filterMode === "day") d.setDate(d.getDate() + direction);
-    else if (this.filterMode === "week") d.setDate(d.getDate() + direction * 7);
-    else d.setMonth(d.getMonth() + direction);
-    this.referenceDate = d;
-    await this.render();
-  }
-  formatLabel() {
-    const d = this.referenceDate;
-    if (this.filterMode === "day") {
-      return d.toLocaleDateString(void 0, { month: "long", day: "numeric", year: "numeric" });
-    }
-    if (this.filterMode === "week") {
-      const start = new Date(d);
-      const day = start.getDay();
-      start.setDate(start.getDate() - (day === 0 ? 6 : day - 1));
-      const end = new Date(start);
-      end.setDate(end.getDate() + 6);
-      const fmt = (x) => x.toLocaleDateString(void 0, { month: "short", day: "numeric" });
-      return `${fmt(start)} \u2013 ${fmt(end)}, ${end.getFullYear()}`;
-    }
-    if (this.filterMode === "pinned") return "Pinned";
-    return d.toLocaleDateString(void 0, { month: "long", year: "numeric" });
-  }
-  // -------------------------------------------------------------------------
-  // Core render
-  // -------------------------------------------------------------------------
-  async render() {
-    if (this.rendering) {
-      this.renderRequested = true;
-      return;
-    }
-    this.rendering = true;
-    try {
-      await this.renderInternal();
-    } finally {
-      this.rendering = false;
-      if (this.renderRequested) {
-        this.renderRequested = false;
-        await this.render();
-      }
-    }
-  }
-  async renderInternal() {
-    var _a;
-    const container = this.containerEl.children[1];
-    container.empty();
-    container.addClass("surface-view");
-    const header = container.createDiv("surface-header");
-    const navContainer = header.createDiv("surface-nav-container");
-    const navPills = navContainer.createEl("ul", {
-      cls: "nav nav-pills",
-      attr: { role: "tablist" }
-    });
-    for (const mode of MODES) {
-      const isActive = mode === this.filterMode;
-      const li = navPills.createEl("li", {
-        cls: "nav-item",
-        attr: { role: "presentation" }
-      });
-      li.createEl("button", {
-        cls: "nav-link" + (isActive ? " active" : ""),
-        text: MODE_LABELS[mode],
-        attr: {
-          role: "tab",
-          "aria-selected": isActive ? "true" : "false",
-          tabindex: isActive ? "0" : "-1"
-        }
-      }).onclick = async () => {
-        this.filterMode = mode;
-        if (mode !== "pinned") this.referenceDate = /* @__PURE__ */ new Date();
-        await this.render();
-      };
-    }
-    navPills.addEventListener("keydown", (e) => {
-      const currentIndex = MODES.indexOf(this.filterMode);
-      if (e.key === "ArrowRight") {
-        e.preventDefault();
-        this.filterMode = MODES[(currentIndex + 1) % MODES.length];
-        if (this.filterMode !== "pinned") this.referenceDate = /* @__PURE__ */ new Date();
-        void this.render().then(() => {
-          var _a2;
-          (_a2 = this.containerEl.querySelector(".nav-link.active")) == null ? void 0 : _a2.focus();
-        });
-      } else if (e.key === "ArrowLeft") {
-        e.preventDefault();
-        this.filterMode = MODES[(currentIndex - 1 + MODES.length) % MODES.length];
-        if (this.filterMode !== "pinned") this.referenceDate = /* @__PURE__ */ new Date();
-        void this.render().then(() => {
-          var _a2;
-          (_a2 = this.containerEl.querySelector(".nav-link.active")) == null ? void 0 : _a2.focus();
-        });
-      }
-    });
-    if (this.filterMode !== "pinned") {
-      const navRow = header.createDiv("surface-nav-row");
-      const prevBtn = navRow.createEl("button", {
-        cls: "btn-nav-arrow prev",
-        attr: { "aria-label": "Previous period" }
-      });
-      prevBtn.createDiv("arrow-icon");
-      prevBtn.onclick = () => this.shiftDate(-1);
-      navRow.createSpan({ cls: "surface-date-label", text: this.formatLabel() });
-      const nextBtn = navRow.createEl("button", {
-        cls: "btn-nav-arrow next",
-        attr: { "aria-label": "Next period" }
-      });
-      nextBtn.createDiv("arrow-icon");
-      nextBtn.onclick = () => this.shiftDate(1);
-    }
-    const entriesContainer = container.createDiv("surface-entries");
-    if (this.filterMode === "pinned") {
-      await this.renderPinnedEntries(entriesContainer);
-      return;
-    }
-    const allEntries = await this.plugin.getEntries();
-    const filtered = allEntries.filter((e) => this.isInSelection(e.date));
-    if (filtered.length === 0) {
-      entriesContainer.createEl("p", {
-        text: `Nothing here for ${this.formatLabel()}.`,
-        cls: "surface-empty-state"
-      });
-      return;
-    }
-    const byDate = /* @__PURE__ */ new Map();
-    for (const entry of filtered) {
-      const key = this.dateKey(entry.date);
-      const list = (_a = byDate.get(key)) != null ? _a : [];
-      list.push(entry);
-      byDate.set(key, list);
-    }
-    for (const [, dateEntries] of byDate) {
-      const section = entriesContainer.createDiv("surface-section");
-      section.createEl("p", {
-        cls: "surface-date-heading",
-        text: this.formatDateHeading(dateEntries[0].date)
-      });
-      const group = section.createDiv("surface-entries-group");
-      for (const entry of dateEntries) {
-        this.renderEntryCard(group, entry);
-      }
-    }
-  }
-  // -------------------------------------------------------------------------
-  // Pinned tab
-  // -------------------------------------------------------------------------
-  async renderPinnedEntries(container) {
-    var _a;
-    const terms = this.plugin.settings.surfaceTerms.filter((t) => t.term.trim().length > 0);
-    if (terms.length === 0) {
-      const msg = container.createEl("p", { cls: "surface-empty-state" });
-      msg.appendText("No surface terms configured. Add terms in ");
-      msg.createEl("a", {
-        text: "Settings",
-        href: "#"
-      }).onclick = (e) => {
-        e.preventDefault();
-        this.plugin.openPluginSettings();
-      };
-      msg.appendText(".");
-      return;
-    }
-    const termEntries = await this.plugin.getTermEntries();
-    if (termEntries.length === 0) {
-      container.createEl("p", {
-        text: "No matching headings found in your vault.",
-        cls: "surface-empty-state"
-      });
-      return;
-    }
-    const byTerm = /* @__PURE__ */ new Map();
-    for (const t of terms) byTerm.set(t.id, []);
-    for (const entry of termEntries) {
-      (_a = byTerm.get(entry.termId)) == null ? void 0 : _a.push(entry);
-    }
-    for (const [termId, entries] of byTerm) {
-      if (entries.length === 0) continue;
-      const t = terms.find((x) => x.id === termId);
-      const label = ((t == null ? void 0 : t.label) || (t == null ? void 0 : t.term) || termId).toUpperCase();
-      const section = container.createDiv("surface-section");
-      section.createEl("p", { cls: "surface-date-heading", text: label });
-      const group = section.createDiv("surface-entries-group");
-      for (const entry of entries) {
-        this.renderEntryCard(group, entry);
-      }
-    }
-  }
-  // -------------------------------------------------------------------------
-  // Entry card (shared by date and pinned views)
-  // -------------------------------------------------------------------------
-  renderEntryCard(container, entry) {
-    var _a, _b;
-    const fileName = (_b = (_a = entry.filePath.split("/").pop()) == null ? void 0 : _a.replace(/\.md$/, "")) != null ? _b : entry.filePath;
-    const preview = this.extractPreview(entry.content);
-    let expanded = false;
-    const card = container.createDiv("surface-card");
-    const summary = card.createDiv("surface-card-summary");
-    const info = summary.createDiv("surface-card-info");
-    info.createSpan({ cls: "surface-card-title", text: fileName });
-    if (preview) {
-      info.createSpan({ cls: "surface-card-preview", text: preview });
-    }
-    const chevron = summary.createDiv("surface-chevron");
-    chevron.setAttribute("aria-hidden", "true");
-    const jumpBtn = summary.createEl("button", {
-      cls: "surface-jump-btn",
-      text: "\u2197",
-      attr: { "aria-label": "Open in note" }
-    });
-    jumpBtn.onclick = async (e) => {
-      e.stopPropagation();
-      const file = this.app.vault.getAbstractFileByPath(entry.filePath);
-      if (!(file instanceof import_obsidian.TFile)) return;
-      const leaf = this.app.workspace.getLeaf();
-      if (!leaf) return;
-      await leaf.openFile(file);
-      const view = leaf.view;
-      if (view instanceof import_obsidian.MarkdownView) {
-        view.editor.setCursor({ line: entry.lineNumber - 1, ch: 0 });
-        view.editor.scrollIntoView(
-          { from: { line: entry.lineNumber - 1, ch: 0 }, to: { line: entry.lineNumber - 1, ch: 0 } },
-          true
-        );
-      }
-    };
-    const body = card.createDiv("surface-card-body");
-    const bodyInner = body.createDiv("surface-card-body-inner");
-    summary.onclick = async () => {
-      if (bodyInner.childElementCount === 0) {
-        if (entry.content) {
-          await import_obsidian.MarkdownRenderer.render(this.app, entry.content, bodyInner, entry.filePath, this.component);
-        } else {
-          bodyInner.createEl("p", { text: "No content.", cls: "surface-empty-state" });
-        }
-      }
-      expanded = !expanded;
-      body.toggleClass("is-expanded", expanded);
-      chevron.toggleClass("is-expanded", expanded);
-      card.toggleClass("is-expanded", expanded);
-    };
-  }
-  // -------------------------------------------------------------------------
-  // Helpers
-  // -------------------------------------------------------------------------
-  isInSelection(date) {
-    if (this.filterMode === "day") return isSameDay(date, this.referenceDate);
-    if (this.filterMode === "week") return isSameWeek(date, this.referenceDate);
-    return isSameMonth(date, this.referenceDate);
-  }
-  dateKey(date) {
-    return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
-  }
-  formatDateHeading(d) {
-    return d.toLocaleDateString(void 0, {
-      weekday: "long",
-      month: "long",
-      day: "numeric",
-      year: "numeric"
-    }).toUpperCase();
-  }
-  extractPreview(content) {
-    var _a;
-    const line = (_a = content.split("\n").find((l) => l.trim().length > 0)) != null ? _a : "";
-    const clean = line.replace(/^[#>\-*_`\s]+/, "").trim();
-    return clean.length > 72 ? clean.slice(0, 72) + "\u2026" : clean;
-  }
-  isReferenceDateStale(now) {
-    if (this.filterMode === "pinned") return false;
-    if (this.filterMode === "day") return !isSameDay(this.referenceDate, now);
-    if (this.filterMode === "week") return !isSameWeek(this.referenceDate, now);
-    return !isSameMonth(this.referenceDate, now);
-  }
-  async syncReferenceDateToNowIfStale() {
-    const now = /* @__PURE__ */ new Date();
-    if (!this.isReferenceDateStale(now)) return;
-    this.referenceDate = now;
-    await this.render();
-  }
-};
-
 // src/settings.ts
-var import_obsidian2 = require("obsidian");
+var import_obsidian = require("obsidian");
+
+// src/patterns.ts
 var LONG_MONTH = {
   january: 0,
   february: 1,
@@ -549,12 +252,19 @@ var BUILTIN_PATTERN_DEFS = [
     }
   }
 ];
+var DEFAULT_ENABLED_PATTERNS = /* @__PURE__ */ new Set(["long-month-day-year", "iso-date"]);
 var DEFAULT_SETTINGS = {
   builtinPatterns: Object.fromEntries(
-    BUILTIN_PATTERN_DEFS.map((p) => [p.id, p.id === "long-month-day-year"])
+    BUILTIN_PATTERN_DEFS.map((p) => [p.id, DEFAULT_ENABLED_PATTERNS.has(p.id)])
   ),
   surfaceTerms: []
 };
+function createTermId() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `term-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
 function buildActivePatterns(settings) {
   const patterns = [];
   for (const def of BUILTIN_PATTERN_DEFS) {
@@ -564,7 +274,9 @@ function buildActivePatterns(settings) {
   }
   return patterns;
 }
-var SurfaceSettingTab = class extends import_obsidian2.PluginSettingTab {
+
+// src/settings.ts
+var SurfaceSettingTab = class extends import_obsidian.PluginSettingTab {
   constructor(app, plugin) {
     super(app, plugin);
     this.saveTimer = null;
@@ -596,7 +308,7 @@ var SurfaceSettingTab = class extends import_obsidian2.PluginSettingTab {
           name: "Add term",
           action: () => {
             this.plugin.settings.surfaceTerms.push({
-              id: `term-${Date.now()}`,
+              id: createTermId(),
               label: "",
               term: ""
             });
@@ -639,7 +351,7 @@ var SurfaceSettingTab = class extends import_obsidian2.PluginSettingTab {
     }
   }
   refreshDeclarativeList() {
-    if ((0, import_obsidian2.requireApiVersion)("1.13.0")) {
+    if ((0, import_obsidian.requireApiVersion)("1.13.0")) {
       this.update();
     }
   }
@@ -650,12 +362,12 @@ var SurfaceSettingTab = class extends import_obsidian2.PluginSettingTab {
   renderLegacy() {
     const { containerEl } = this;
     containerEl.empty();
-    new import_obsidian2.Setting(containerEl).setName("Built-in date formats").setHeading();
-    new import_obsidian2.Setting(containerEl).setDesc(
+    new import_obsidian.Setting(containerEl).setName("Built-in date formats").setHeading();
+    new import_obsidian.Setting(containerEl).setDesc(
       "Toggle which heading formats surface will recognize as dates. All formats support optional ordinal suffixes (1st, 2nd, 3rd...)."
     );
     for (const def of BUILTIN_PATTERN_DEFS) {
-      new import_obsidian2.Setting(containerEl).setName(def.label).setDesc(`Example: ${def.example}`).addToggle(
+      new import_obsidian.Setting(containerEl).setName(def.label).setDesc(`Example: ${def.example}`).addToggle(
         (toggle) => {
           var _a;
           return toggle.setValue((_a = this.plugin.settings.builtinPatterns[def.id]) != null ? _a : false).onChange(async (value) => {
@@ -665,15 +377,15 @@ var SurfaceSettingTab = class extends import_obsidian2.PluginSettingTab {
         }
       );
     }
-    new import_obsidian2.Setting(containerEl).setName("Keyword terms").setHeading();
+    new import_obsidian.Setting(containerEl).setName("Keyword terms").setHeading();
     const terms = this.plugin.settings.surfaceTerms;
     if (terms.length === 0) {
-      new import_obsidian2.Setting(containerEl).setDesc(
+      new import_obsidian.Setting(containerEl).setDesc(
         "Any heading containing a term will appear in the pinned tab. The label is shown as the group header."
       );
     }
     terms.forEach((_, index) => {
-      const setting = new import_obsidian2.Setting(containerEl);
+      const setting = new import_obsidian.Setting(containerEl);
       this.addTermInputs(setting, index);
       setting.addExtraButton(
         (btn) => btn.setIcon("arrow-up").setTooltip("Move up").setDisabled(index === 0).onClick(async () => {
@@ -697,9 +409,9 @@ var SurfaceSettingTab = class extends import_obsidian2.PluginSettingTab {
         })
       );
     });
-    new import_obsidian2.Setting(containerEl).addButton(
+    new import_obsidian.Setting(containerEl).addButton(
       (btn) => btn.setButtonText("Add term").setCta().onClick(async () => {
-        terms.push({ id: `term-${Date.now()}`, label: "", term: "" });
+        terms.push({ id: createTermId(), label: "", term: "" });
         await this.plugin.saveSettings();
         this.renderLegacy();
       })
@@ -740,12 +452,421 @@ var SurfaceSettingTab = class extends import_obsidian2.PluginSettingTab {
   }
 };
 
+// src/view.ts
+var VIEW_TYPE = "surface-view";
+var MODES = ["day", "week", "month", "pinned"];
+var MODE_LABELS = {
+  day: "Day",
+  week: "Week",
+  month: "Month",
+  pinned: "Pinned"
+};
+var SurfaceView = class extends import_obsidian2.ItemView {
+  constructor(leaf, plugin) {
+    super(leaf);
+    this.filterMode = "day";
+    this.referenceDate = /* @__PURE__ */ new Date();
+    // True while the view is tracking "now"; day rollover only auto-advances then
+    this.followingNow = true;
+    this.renderComponent = null;
+    this.rendering = false;
+    this.renderRequested = false;
+    this.plugin = plugin;
+  }
+  getViewType() {
+    return VIEW_TYPE;
+  }
+  getDisplayText() {
+    return "Surface";
+  }
+  getIcon() {
+    return "calendar-search";
+  }
+  async onOpen() {
+    this.registerDomEvent(this.containerEl.win, "focus", () => {
+      void this.syncReferenceDateToNowIfStale();
+    });
+    this.registerDomEvent(this.containerEl.doc, "visibilitychange", () => {
+      if (!this.containerEl.doc.hidden) {
+        void this.syncReferenceDateToNowIfStale();
+      }
+    });
+    this.registerInterval(window.setInterval(() => {
+      void this.syncReferenceDateToNowIfStale();
+    }, 6e4));
+    await this.render();
+  }
+  async onClose() {
+    var _a;
+    (_a = this.renderComponent) == null ? void 0 : _a.unload();
+    this.renderComponent = null;
+  }
+  async refresh() {
+    await this.render();
+  }
+  async resetToNowAndRender() {
+    this.referenceDate = /* @__PURE__ */ new Date();
+    this.followingNow = true;
+    await this.render();
+  }
+  async shiftDate(direction) {
+    const d = new Date(this.referenceDate);
+    if (this.filterMode === "day") d.setDate(d.getDate() + direction);
+    else if (this.filterMode === "week") d.setDate(d.getDate() + direction * 7);
+    else {
+      d.setDate(1);
+      d.setMonth(d.getMonth() + direction);
+    }
+    this.referenceDate = d;
+    this.followingNow = !this.isReferenceDateStale(/* @__PURE__ */ new Date());
+    await this.render();
+  }
+  formatLabel() {
+    const d = this.referenceDate;
+    if (this.filterMode === "day") {
+      return d.toLocaleDateString(void 0, { month: "long", day: "numeric", year: "numeric" });
+    }
+    if (this.filterMode === "week") {
+      const start = new Date(d);
+      const day = start.getDay();
+      start.setDate(start.getDate() - (day === 0 ? 6 : day - 1));
+      const end = new Date(start);
+      end.setDate(end.getDate() + 6);
+      const fmt = (x) => x.toLocaleDateString(void 0, { month: "short", day: "numeric" });
+      return `${fmt(start)} \u2013 ${fmt(end)}, ${end.getFullYear()}`;
+    }
+    if (this.filterMode === "pinned") return "Pinned";
+    return d.toLocaleDateString(void 0, { month: "long", year: "numeric" });
+  }
+  // -------------------------------------------------------------------------
+  // Core render
+  // -------------------------------------------------------------------------
+  async render() {
+    if (this.rendering) {
+      this.renderRequested = true;
+      return;
+    }
+    this.rendering = true;
+    try {
+      await this.renderInternal();
+    } finally {
+      this.rendering = false;
+      if (this.renderRequested) {
+        this.renderRequested = false;
+        await this.render();
+      }
+    }
+  }
+  async renderInternal() {
+    var _a, _b;
+    (_a = this.renderComponent) == null ? void 0 : _a.unload();
+    this.renderComponent = new import_obsidian2.Component();
+    this.renderComponent.load();
+    const container = this.containerEl.children[1];
+    container.empty();
+    container.addClass("surface-view");
+    const header = container.createDiv("surface-header");
+    const navContainer = header.createDiv("surface-nav-container");
+    const navPills = navContainer.createEl("ul", {
+      cls: "nav nav-pills",
+      attr: { role: "tablist" }
+    });
+    for (const mode of MODES) {
+      const isActive = mode === this.filterMode;
+      const li = navPills.createEl("li", {
+        cls: "nav-item",
+        attr: { role: "presentation" }
+      });
+      li.createEl("button", {
+        cls: "nav-link" + (isActive ? " active" : ""),
+        text: MODE_LABELS[mode],
+        attr: {
+          role: "tab",
+          "aria-selected": isActive ? "true" : "false",
+          tabindex: isActive ? "0" : "-1"
+        }
+      }).onclick = async () => {
+        this.filterMode = mode;
+        if (mode !== "pinned") {
+          this.referenceDate = /* @__PURE__ */ new Date();
+          this.followingNow = true;
+        }
+        await this.render();
+      };
+    }
+    navPills.addEventListener("keydown", (e) => {
+      const currentIndex = MODES.indexOf(this.filterMode);
+      if (e.key === "ArrowRight") {
+        e.preventDefault();
+        this.filterMode = MODES[(currentIndex + 1) % MODES.length];
+        if (this.filterMode !== "pinned") {
+          this.referenceDate = /* @__PURE__ */ new Date();
+          this.followingNow = true;
+        }
+        void this.render().then(() => {
+          var _a2;
+          (_a2 = this.containerEl.querySelector(".nav-link.active")) == null ? void 0 : _a2.focus();
+        });
+      } else if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        this.filterMode = MODES[(currentIndex - 1 + MODES.length) % MODES.length];
+        if (this.filterMode !== "pinned") {
+          this.referenceDate = /* @__PURE__ */ new Date();
+          this.followingNow = true;
+        }
+        void this.render().then(() => {
+          var _a2;
+          (_a2 = this.containerEl.querySelector(".nav-link.active")) == null ? void 0 : _a2.focus();
+        });
+      }
+    });
+    if (this.filterMode !== "pinned") {
+      const navRow = header.createDiv("surface-nav-row");
+      const prevBtn = navRow.createEl("button", {
+        cls: "btn-nav-arrow prev",
+        attr: { "aria-label": "Previous period" }
+      });
+      prevBtn.createDiv("arrow-icon");
+      prevBtn.onclick = () => this.shiftDate(-1);
+      navRow.createSpan({ cls: "surface-date-label", text: this.formatLabel() });
+      const nextBtn = navRow.createEl("button", {
+        cls: "btn-nav-arrow next",
+        attr: { "aria-label": "Next period" }
+      });
+      nextBtn.createDiv("arrow-icon");
+      nextBtn.onclick = () => this.shiftDate(1);
+      if (this.isReferenceDateStale(/* @__PURE__ */ new Date())) {
+        header.createEl("button", {
+          cls: "surface-today-btn",
+          text: "Back to today",
+          attr: { "aria-label": "Back to current period" }
+        }).onclick = () => void this.resetToNowAndRender();
+      }
+    }
+    const entriesContainer = container.createDiv("surface-entries");
+    if (this.filterMode === "pinned") {
+      await this.renderPinnedEntries(entriesContainer);
+      return;
+    }
+    const allEntries = await this.plugin.getEntries();
+    const filtered = allEntries.filter((e) => this.isInSelection(e.date));
+    if (filtered.length === 0) {
+      if (allEntries.length === 0) {
+        this.renderOnboardingHint(entriesContainer);
+      } else {
+        entriesContainer.createEl("p", {
+          text: `Nothing here for ${this.formatLabel()}.`,
+          cls: "surface-empty-state"
+        });
+      }
+      return;
+    }
+    const byDate = /* @__PURE__ */ new Map();
+    for (const entry of filtered) {
+      const key = this.dateKey(entry.date);
+      const list = (_b = byDate.get(key)) != null ? _b : [];
+      list.push(entry);
+      byDate.set(key, list);
+    }
+    for (const [, dateEntries] of byDate) {
+      const section = entriesContainer.createDiv("surface-section");
+      section.createEl("p", {
+        cls: "surface-date-heading",
+        text: this.formatDateHeading(dateEntries[0].date)
+      });
+      const group = section.createDiv("surface-entries-group");
+      for (const entry of dateEntries) {
+        this.renderEntryCard(group, entry);
+      }
+    }
+  }
+  // -------------------------------------------------------------------------
+  // Empty states
+  // -------------------------------------------------------------------------
+  renderOnboardingHint(container) {
+    const box = container.createDiv("surface-empty-state surface-onboarding");
+    const active = BUILTIN_PATTERN_DEFS.find((def) => this.plugin.settings.builtinPatterns[def.id]);
+    if (!active) {
+      box.createEl("p", { text: "No date formats are enabled." });
+      const p = box.createEl("p");
+      p.appendText("Enable at least one format in ");
+      this.createSettingsLink(p);
+      p.appendText(".");
+      return;
+    }
+    box.createEl("p", { text: "No dated entries found in your vault yet." });
+    const hint = box.createEl("p");
+    hint.appendText("Add a heading like ");
+    hint.createEl("code", { text: `## ${active.example.split(" / ")[0]}` });
+    hint.appendText(" to any note and it will show up here.");
+    const more = box.createEl("p");
+    more.appendText("More formats can be enabled in ");
+    this.createSettingsLink(more);
+    more.appendText(".");
+  }
+  createSettingsLink(parent) {
+    parent.createEl("button", { cls: "surface-link-btn", text: "Settings" }).onclick = () => {
+      this.plugin.openPluginSettings();
+    };
+  }
+  // -------------------------------------------------------------------------
+  // Pinned tab
+  // -------------------------------------------------------------------------
+  async renderPinnedEntries(container) {
+    var _a;
+    const terms = this.plugin.settings.surfaceTerms.filter((t) => t.term.trim().length > 0);
+    if (terms.length === 0) {
+      const msg = container.createEl("p", { cls: "surface-empty-state" });
+      msg.appendText("No keyword terms configured. Add terms in ");
+      this.createSettingsLink(msg);
+      msg.appendText(".");
+      return;
+    }
+    const termEntries = await this.plugin.getTermEntries();
+    if (termEntries.length === 0) {
+      container.createEl("p", {
+        text: "No matching headings found in your vault.",
+        cls: "surface-empty-state"
+      });
+      return;
+    }
+    const byTerm = /* @__PURE__ */ new Map();
+    for (const t of terms) byTerm.set(t.id, []);
+    for (const entry of termEntries) {
+      (_a = byTerm.get(entry.termId)) == null ? void 0 : _a.push(entry);
+    }
+    for (const [termId, entries] of byTerm) {
+      if (entries.length === 0) continue;
+      const t = terms.find((x) => x.id === termId);
+      const label = ((t == null ? void 0 : t.label) || (t == null ? void 0 : t.term) || termId).toUpperCase();
+      const section = container.createDiv("surface-section");
+      section.createEl("p", { cls: "surface-date-heading", text: label });
+      const group = section.createDiv("surface-entries-group");
+      for (const entry of entries) {
+        this.renderEntryCard(group, entry);
+      }
+    }
+  }
+  // -------------------------------------------------------------------------
+  // Entry card (shared by date and pinned views)
+  // -------------------------------------------------------------------------
+  renderEntryCard(container, entry) {
+    var _a, _b;
+    const fileName = (_b = (_a = entry.filePath.split("/").pop()) == null ? void 0 : _a.replace(/\.md$/, "")) != null ? _b : entry.filePath;
+    const preview = this.extractPreview(entry.content);
+    let expanded = false;
+    const card = container.createDiv("surface-card");
+    const summary = card.createDiv({
+      cls: "surface-card-summary",
+      attr: { role: "button", tabindex: "0", "aria-expanded": "false" }
+    });
+    const info = summary.createDiv("surface-card-info");
+    info.createSpan({ cls: "surface-card-title", text: fileName });
+    if (preview) {
+      info.createSpan({ cls: "surface-card-preview", text: preview });
+    }
+    const chevron = summary.createDiv("surface-chevron");
+    chevron.setAttribute("aria-hidden", "true");
+    const jumpBtn = summary.createEl("button", {
+      cls: "surface-jump-btn",
+      text: "\u2197",
+      attr: { "aria-label": "Open in note" }
+    });
+    jumpBtn.onclick = async (e) => {
+      e.stopPropagation();
+      const file = this.app.vault.getAbstractFileByPath(entry.filePath);
+      if (!(file instanceof import_obsidian2.TFile)) return;
+      const leaf = this.app.workspace.getLeaf(import_obsidian2.Keymap.isModEvent(e));
+      if (!leaf) return;
+      await leaf.openFile(file, { eState: { line: entry.lineNumber - 1 } });
+    };
+    const body = card.createDiv("surface-card-body");
+    const bodyInner = body.createDiv("surface-card-body-inner");
+    const toggle = async () => {
+      var _a2;
+      if (bodyInner.childElementCount === 0) {
+        if (entry.content) {
+          await import_obsidian2.MarkdownRenderer.render(
+            this.app,
+            entry.content,
+            bodyInner,
+            entry.filePath,
+            (_a2 = this.renderComponent) != null ? _a2 : this
+          );
+        } else {
+          bodyInner.createEl("p", { text: "No content.", cls: "surface-empty-state" });
+        }
+      }
+      expanded = !expanded;
+      body.toggleClass("is-expanded", expanded);
+      chevron.toggleClass("is-expanded", expanded);
+      card.toggleClass("is-expanded", expanded);
+      summary.setAttribute("aria-expanded", String(expanded));
+    };
+    summary.onclick = () => void toggle();
+    summary.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        void toggle();
+      }
+    });
+  }
+  // -------------------------------------------------------------------------
+  // Helpers
+  // -------------------------------------------------------------------------
+  isInSelection(date) {
+    if (this.filterMode === "day") return isSameDay(date, this.referenceDate);
+    if (this.filterMode === "week") return isSameWeek(date, this.referenceDate);
+    return isSameMonth(date, this.referenceDate);
+  }
+  dateKey(date) {
+    return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+  }
+  formatDateHeading(d) {
+    return d.toLocaleDateString(void 0, {
+      weekday: "long",
+      month: "long",
+      day: "numeric",
+      year: "numeric"
+    }).toUpperCase();
+  }
+  extractPreview(content) {
+    var _a;
+    const line = (_a = content.split("\n").find((l) => l.trim().length > 0)) != null ? _a : "";
+    const clean = line.replace(/^[#>\-*_`\s]+/, "").trim();
+    return clean.length > 72 ? clean.slice(0, 72) + "\u2026" : clean;
+  }
+  isReferenceDateStale(now) {
+    if (this.filterMode === "pinned") return false;
+    if (this.filterMode === "day") return !isSameDay(this.referenceDate, now);
+    if (this.filterMode === "week") return !isSameWeek(this.referenceDate, now);
+    return !isSameMonth(this.referenceDate, now);
+  }
+  async syncReferenceDateToNowIfStale() {
+    if (!this.followingNow) return;
+    const now = /* @__PURE__ */ new Date();
+    if (!this.isReferenceDateStale(now)) return;
+    this.referenceDate = now;
+    await this.render();
+  }
+};
+
 // src/main.ts
 var SurfacePlugin = class extends import_obsidian3.Plugin {
   constructor() {
     super(...arguments);
-    this.entriesCache = null;
-    this.termEntriesCache = null;
+    // Promise-valued so an invalidation mid-scan discards that scan's result
+    this.entriesPromise = null;
+    this.termEntriesPromise = null;
+    this.refreshOpenViews = (0, import_obsidian3.debounce)(
+      () => {
+        for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) {
+          if (leaf.view instanceof SurfaceView) void leaf.view.refresh();
+        }
+      },
+      1e3,
+      true
+    );
   }
   async onload() {
     await this.loadSettings();
@@ -759,19 +880,24 @@ var SurfacePlugin = class extends import_obsidian3.Plugin {
       callback: () => this.activateView()
     });
     this.addSettingTab(new SurfaceSettingTab(this.app, this));
-    const invalidate = () => {
-      this.entriesCache = null;
-      this.termEntriesCache = null;
-    };
-    this.registerEvent(this.app.vault.on("modify", invalidate));
-    this.registerEvent(this.app.vault.on("create", invalidate));
-    this.registerEvent(this.app.vault.on("delete", invalidate));
+    this.app.workspace.onLayoutReady(() => {
+      const invalidate = () => {
+        this.entriesPromise = null;
+        this.termEntriesPromise = null;
+        this.refreshOpenViews();
+      };
+      this.registerEvent(this.app.vault.on("modify", invalidate));
+      this.registerEvent(this.app.vault.on("create", invalidate));
+      this.registerEvent(this.app.vault.on("delete", invalidate));
+      this.registerEvent(this.app.vault.on("rename", invalidate));
+    });
   }
   onunload() {
+    this.refreshOpenViews.cancel();
   }
   async loadSettings() {
     const saved = await this.loadData();
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, saved != null ? saved : {});
+    this.settings = Object.assign(structuredClone(DEFAULT_SETTINGS), saved != null ? saved : {});
     for (const key of Object.keys(DEFAULT_SETTINGS.builtinPatterns)) {
       if (this.settings.builtinPatterns[key] === void 0) {
         this.settings.builtinPatterns[key] = DEFAULT_SETTINGS.builtinPatterns[key];
@@ -782,12 +908,22 @@ var SurfacePlugin = class extends import_obsidian3.Plugin {
     }
   }
   async saveSettings() {
-    this.entriesCache = null;
-    this.termEntriesCache = null;
+    this.entriesPromise = null;
+    this.termEntriesPromise = null;
     await this.saveData(this.settings);
+    this.refreshOpenViews();
   }
-  async getEntries() {
-    if (this.entriesCache) return this.entriesCache;
+  getEntries() {
+    if (!this.entriesPromise) {
+      const scan = this.scanEntries();
+      this.entriesPromise = scan;
+      scan.catch(() => {
+        if (this.entriesPromise === scan) this.entriesPromise = null;
+      });
+    }
+    return this.entriesPromise;
+  }
+  async scanEntries() {
     const patterns = buildActivePatterns(this.settings);
     const entries = [];
     for (const file of this.app.vault.getMarkdownFiles()) {
@@ -795,18 +931,25 @@ var SurfacePlugin = class extends import_obsidian3.Plugin {
       entries.push(...parseEntries(content, file.path, patterns));
     }
     entries.sort((a, b) => b.date.getTime() - a.date.getTime());
-    this.entriesCache = entries;
     return entries;
   }
-  async getTermEntries() {
-    if (this.termEntriesCache) return this.termEntriesCache;
+  getTermEntries() {
+    if (!this.termEntriesPromise) {
+      const scan = this.scanTermEntries();
+      this.termEntriesPromise = scan;
+      scan.catch(() => {
+        if (this.termEntriesPromise === scan) this.termEntriesPromise = null;
+      });
+    }
+    return this.termEntriesPromise;
+  }
+  async scanTermEntries() {
     const terms = this.settings.surfaceTerms.filter((t) => t.term.trim().length > 0);
     const entries = [];
     for (const file of this.app.vault.getMarkdownFiles()) {
       const content = await this.app.vault.cachedRead(file);
       entries.push(...parseTermEntries(content, file.path, terms));
     }
-    this.termEntriesCache = entries;
     return entries;
   }
   async activateView() {

@@ -95,14 +95,16 @@ Each entry is displayed as a card showing:
 
 Surface ships with six built-in date formats. Toggle them individually in Settings.
 
-| Format | Example |
-|---|---|
-| Month D, YYYY | `March 4th, 2026` |
-| YYYY-MM-DD | `2026-03-04` |
-| MM/DD/YYYY | `03/04/2026` |
-| D Month YYYY | `4th March 2026` |
-| Mon D, YYYY | `Mar 4th, 2026` |
-| D Mon YYYY | `4th Mar 2026` |
+| Format | Example | Enabled by default |
+|---|---|---|
+| Month D, YYYY | `March 4th, 2026` | Yes |
+| YYYY-MM-DD | `2026-03-04` | Yes |
+| MM/DD/YYYY | `03/04/2026` | No |
+| D Month YYYY | `4th March 2026` | No |
+| Mon D, YYYY | `Mar 4th, 2026` | No |
+| D Mon YYYY | `4th Mar 2026` | No |
+
+Note: the ISO format expects zero-padded dates, so `2026-03-04` matches but `2026-3-4` does not.
 
 All formats support optional ordinal suffixes (`1st`, `2nd`, `3rd`, `4th`...). The heading level (`#` count) does not matter - any level is recognized.
 

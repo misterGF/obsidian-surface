@@ -1,6 +1,7 @@
-import { ItemView, WorkspaceLeaf, TFile, MarkdownView, MarkdownRenderer, Component } from "obsidian";
+import { ItemView, WorkspaceLeaf, TFile, MarkdownRenderer, Component, Keymap } from "obsidian";
 import type SurfacePlugin from "./main";
 import { BaseEntry, DateEntry, TermEntry, isSameDay, isSameWeek, isSameMonth } from "./parser";
+import { BUILTIN_PATTERN_DEFS } from "./settings";
 
 export const VIEW_TYPE = "surface-view";
 export type FilterMode = "day" | "week" | "month" | "pinned";
@@ -17,15 +18,15 @@ export class SurfaceView extends ItemView {
   plugin: SurfacePlugin;
   private filterMode: FilterMode = "day";
   private referenceDate: Date = new Date();
-  private component: Component;
+  // True while the view is tracking "now"; day rollover only auto-advances then
+  private followingNow = true;
+  private renderComponent: Component | null = null;
   private rendering = false;
   private renderRequested = false;
-  private autoRefreshIntervalId: number | null = null;
 
   constructor(leaf: WorkspaceLeaf, plugin: SurfacePlugin) {
     super(leaf);
     this.plugin = plugin;
-    this.component = new Component();
   }
 
   getViewType() { return VIEW_TYPE; }
@@ -33,35 +34,36 @@ export class SurfaceView extends ItemView {
   getIcon() { return "calendar-search"; }
 
   async onOpen() {
-    this.component.load();
-
-    this.registerDomEvent(window, "focus", () => {
+    // containerEl.win/doc rather than window/activeDocument: popout-safe
+    this.registerDomEvent(this.containerEl.win, "focus", () => {
       void this.syncReferenceDateToNowIfStale();
     });
 
-    this.registerDomEvent(activeDocument, "visibilitychange", () => {
-      if (!activeDocument.hidden) {
+    this.registerDomEvent(this.containerEl.doc, "visibilitychange", () => {
+      if (!this.containerEl.doc.hidden) {
         void this.syncReferenceDateToNowIfStale();
       }
     });
 
-    this.autoRefreshIntervalId = window.setInterval(() => {
+    this.registerInterval(window.setInterval(() => {
       void this.syncReferenceDateToNowIfStale();
-    }, 60_000);
+    }, 60_000));
 
     await this.render();
   }
 
   async onClose() {
-    if (this.autoRefreshIntervalId !== null) {
-      window.clearInterval(this.autoRefreshIntervalId);
-      this.autoRefreshIntervalId = null;
-    }
-    this.component.unload();
+    this.renderComponent?.unload();
+    this.renderComponent = null;
+  }
+
+  async refresh() {
+    await this.render();
   }
 
   async resetToNowAndRender() {
     this.referenceDate = new Date();
+    this.followingNow = true;
     await this.render();
   }
 
@@ -69,8 +71,13 @@ export class SurfaceView extends ItemView {
     const d = new Date(this.referenceDate);
     if (this.filterMode === "day") d.setDate(d.getDate() + direction);
     else if (this.filterMode === "week") d.setDate(d.getDate() + direction * 7);
-    else d.setMonth(d.getMonth() + direction);
+    else {
+      // setMonth alone overflows from the 29th-31st into the month after next
+      d.setDate(1);
+      d.setMonth(d.getMonth() + direction);
+    }
     this.referenceDate = d;
+    this.followingNow = !this.isReferenceDateStale(new Date());
     await this.render();
   }
 
@@ -114,6 +121,10 @@ export class SurfaceView extends ItemView {
   }
 
   private async renderInternal() {
+    this.renderComponent?.unload();
+    this.renderComponent = new Component();
+    this.renderComponent.load();
+
     const container = this.containerEl.children[1] as HTMLElement;
     container.empty();
     container.addClass("surface-view");
@@ -143,7 +154,10 @@ export class SurfaceView extends ItemView {
         },
       }).onclick = async () => {
         this.filterMode = mode;
-        if (mode !== "pinned") this.referenceDate = new Date();
+        if (mode !== "pinned") {
+          this.referenceDate = new Date();
+          this.followingNow = true;
+        }
         await this.render();
       };
     }
@@ -154,14 +168,20 @@ export class SurfaceView extends ItemView {
       if (e.key === "ArrowRight") {
         e.preventDefault();
         this.filterMode = MODES[(currentIndex + 1) % MODES.length];
-        if (this.filterMode !== "pinned") this.referenceDate = new Date();
+        if (this.filterMode !== "pinned") {
+          this.referenceDate = new Date();
+          this.followingNow = true;
+        }
         void this.render().then(() => {
           (this.containerEl.querySelector(".nav-link.active") as HTMLElement)?.focus();
         });
       } else if (e.key === "ArrowLeft") {
         e.preventDefault();
         this.filterMode = MODES[(currentIndex - 1 + MODES.length) % MODES.length];
-        if (this.filterMode !== "pinned") this.referenceDate = new Date();
+        if (this.filterMode !== "pinned") {
+          this.referenceDate = new Date();
+          this.followingNow = true;
+        }
         void this.render().then(() => {
           (this.containerEl.querySelector(".nav-link.active") as HTMLElement)?.focus();
         });
@@ -187,6 +207,14 @@ export class SurfaceView extends ItemView {
       });
       nextBtn.createDiv("arrow-icon");
       nextBtn.onclick = () => this.shiftDate(1);
+
+      if (this.isReferenceDateStale(new Date())) {
+        header.createEl("button", {
+          cls: "surface-today-btn",
+          text: "Back to today",
+          attr: { "aria-label": "Back to current period" },
+        }).onclick = () => void this.resetToNowAndRender();
+      }
     }
 
     const entriesContainer = container.createDiv("surface-entries");
@@ -203,10 +231,14 @@ export class SurfaceView extends ItemView {
     const filtered = allEntries.filter(e => this.isInSelection(e.date));
 
     if (filtered.length === 0) {
-      entriesContainer.createEl("p", {
-        text: `Nothing here for ${this.formatLabel()}.`,
-        cls: "surface-empty-state",
-      });
+      if (allEntries.length === 0) {
+        this.renderOnboardingHint(entriesContainer);
+      } else {
+        entriesContainer.createEl("p", {
+          text: `Nothing here for ${this.formatLabel()}.`,
+          cls: "surface-empty-state",
+        });
+      }
       return;
     }
 
@@ -233,6 +265,40 @@ export class SurfaceView extends ItemView {
   }
 
   // -------------------------------------------------------------------------
+  // Empty states
+  // -------------------------------------------------------------------------
+
+  private renderOnboardingHint(container: HTMLElement) {
+    const box = container.createDiv("surface-empty-state surface-onboarding");
+    const active = BUILTIN_PATTERN_DEFS.find(def => this.plugin.settings.builtinPatterns[def.id]);
+
+    if (!active) {
+      box.createEl("p", { text: "No date formats are enabled." });
+      const p = box.createEl("p");
+      p.appendText("Enable at least one format in ");
+      this.createSettingsLink(p);
+      p.appendText(".");
+      return;
+    }
+
+    box.createEl("p", { text: "No dated entries found in your vault yet." });
+    const hint = box.createEl("p");
+    hint.appendText("Add a heading like ");
+    hint.createEl("code", { text: `## ${active.example.split(" / ")[0]}` });
+    hint.appendText(" to any note and it will show up here.");
+    const more = box.createEl("p");
+    more.appendText("More formats can be enabled in ");
+    this.createSettingsLink(more);
+    more.appendText(".");
+  }
+
+  private createSettingsLink(parent: HTMLElement) {
+    parent.createEl("button", { cls: "surface-link-btn", text: "Settings" }).onclick = () => {
+      this.plugin.openPluginSettings();
+    };
+  }
+
+  // -------------------------------------------------------------------------
   // Pinned tab
   // -------------------------------------------------------------------------
 
@@ -241,14 +307,8 @@ export class SurfaceView extends ItemView {
 
     if (terms.length === 0) {
       const msg = container.createEl("p", { cls: "surface-empty-state" });
-      msg.appendText("No surface terms configured. Add terms in ");
-      msg.createEl("a", {
-        text: "Settings",
-        href: "#",
-      }).onclick = (e) => {
-        e.preventDefault();
-        this.plugin.openPluginSettings();
-      };
+      msg.appendText("No keyword terms configured. Add terms in ");
+      this.createSettingsLink(msg);
       msg.appendText(".");
       return;
     }
@@ -296,7 +356,10 @@ export class SurfaceView extends ItemView {
     const card = container.createDiv("surface-card");
 
     // Summary row (always visible)
-    const summary = card.createDiv("surface-card-summary");
+    const summary = card.createDiv({
+      cls: "surface-card-summary",
+      attr: { role: "button", tabindex: "0", "aria-expanded": "false" },
+    });
 
     const info = summary.createDiv("surface-card-info");
     info.createSpan({ cls: "surface-card-title", text: fileName });
@@ -318,27 +381,21 @@ export class SurfaceView extends ItemView {
       e.stopPropagation();
       const file = this.app.vault.getAbstractFileByPath(entry.filePath);
       if (!(file instanceof TFile)) return;
-      const leaf = this.app.workspace.getLeaf();
+      const leaf = this.app.workspace.getLeaf(Keymap.isModEvent(e));
       if (!leaf) return;
-      await leaf.openFile(file);
-      const view = leaf.view;
-      if (view instanceof MarkdownView) {
-        view.editor.setCursor({ line: entry.lineNumber - 1, ch: 0 });
-        view.editor.scrollIntoView(
-          { from: { line: entry.lineNumber - 1, ch: 0 }, to: { line: entry.lineNumber - 1, ch: 0 } },
-          true
-        );
-      }
+      await leaf.openFile(file, { eState: { line: entry.lineNumber - 1 } });
     };
 
     // Expandable body — grid animation
     const body = card.createDiv("surface-card-body");
     const bodyInner = body.createDiv("surface-card-body-inner");
 
-    summary.onclick = async () => {
+    const toggle = async () => {
       if (bodyInner.childElementCount === 0) {
         if (entry.content) {
-          await MarkdownRenderer.render(this.app, entry.content, bodyInner, entry.filePath, this.component);
+          await MarkdownRenderer.render(
+            this.app, entry.content, bodyInner, entry.filePath, this.renderComponent ?? this
+          );
         } else {
           bodyInner.createEl("p", { text: "No content.", cls: "surface-empty-state" });
         }
@@ -347,7 +404,16 @@ export class SurfaceView extends ItemView {
       body.toggleClass("is-expanded", expanded);
       chevron.toggleClass("is-expanded", expanded);
       card.toggleClass("is-expanded", expanded);
+      summary.setAttribute("aria-expanded", String(expanded));
     };
+
+    summary.onclick = () => void toggle();
+    summary.addEventListener("keydown", (e: KeyboardEvent) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        void toggle();
+      }
+    });
   }
 
   // -------------------------------------------------------------------------
@@ -384,6 +450,7 @@ export class SurfaceView extends ItemView {
   }
 
   private async syncReferenceDateToNowIfStale() {
+    if (!this.followingNow) return;
     const now = new Date();
     if (!this.isReferenceDateStale(now)) return;
     this.referenceDate = now;

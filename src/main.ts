@@ -1,4 +1,4 @@
-import { Plugin } from "obsidian";
+import { debounce, Plugin } from "obsidian";
 import { SurfaceView, VIEW_TYPE } from "./view";
 import { DateEntry, TermEntry, parseEntries, parseTermEntries } from "./parser";
 import {
@@ -10,8 +10,19 @@ import {
 
 export default class SurfacePlugin extends Plugin {
   settings!: SurfaceSettings;
-  private entriesCache: DateEntry[] | null = null;
-  private termEntriesCache: TermEntry[] | null = null;
+  // Promise-valued so an invalidation mid-scan discards that scan's result
+  private entriesPromise: Promise<DateEntry[]> | null = null;
+  private termEntriesPromise: Promise<TermEntry[]> | null = null;
+
+  private refreshOpenViews = debounce(
+    () => {
+      for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) {
+        if (leaf.view instanceof SurfaceView) void leaf.view.refresh();
+      }
+    },
+    1000,
+    true
+  );
 
   async onload() {
     await this.loadSettings();
@@ -30,23 +41,28 @@ export default class SurfacePlugin extends Plugin {
 
     this.addSettingTab(new SurfaceSettingTab(this.app, this));
 
-    // Invalidate entry caches when vault files change
-    const invalidate = () => {
-      this.entriesCache = null;
-      this.termEntriesCache = null;
-    };
-    this.registerEvent(this.app.vault.on("modify", invalidate));
-    this.registerEvent(this.app.vault.on("create", invalidate));
-    this.registerEvent(this.app.vault.on("delete", invalidate));
+    // Registered after layout-ready because "create" fires per file on startup
+    this.app.workspace.onLayoutReady(() => {
+      const invalidate = () => {
+        this.entriesPromise = null;
+        this.termEntriesPromise = null;
+        this.refreshOpenViews();
+      };
+      this.registerEvent(this.app.vault.on("modify", invalidate));
+      this.registerEvent(this.app.vault.on("create", invalidate));
+      this.registerEvent(this.app.vault.on("delete", invalidate));
+      this.registerEvent(this.app.vault.on("rename", invalidate));
+    });
   }
 
   onunload() {
     // Leaves are preserved so users keep their layout on reload
+    this.refreshOpenViews.cancel();
   }
 
   async loadSettings() {
     const saved = (await this.loadData()) as Partial<SurfaceSettings> | null;
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, saved ?? {});
+    this.settings = Object.assign(structuredClone(DEFAULT_SETTINGS), saved ?? {});
     // Ensure any new built-in pattern keys exist (plugin updates)
     for (const key of Object.keys(DEFAULT_SETTINGS.builtinPatterns)) {
       if (this.settings.builtinPatterns[key] === undefined) {
@@ -60,14 +76,24 @@ export default class SurfacePlugin extends Plugin {
   }
 
   async saveSettings() {
-    this.entriesCache = null;
-    this.termEntriesCache = null;
+    this.entriesPromise = null;
+    this.termEntriesPromise = null;
     await this.saveData(this.settings);
+    this.refreshOpenViews();
   }
 
-  async getEntries(): Promise<DateEntry[]> {
-    if (this.entriesCache) return this.entriesCache;
+  getEntries(): Promise<DateEntry[]> {
+    if (!this.entriesPromise) {
+      const scan = this.scanEntries();
+      this.entriesPromise = scan;
+      scan.catch(() => {
+        if (this.entriesPromise === scan) this.entriesPromise = null;
+      });
+    }
+    return this.entriesPromise;
+  }
 
+  private async scanEntries(): Promise<DateEntry[]> {
     const patterns = buildActivePatterns(this.settings);
     const entries: DateEntry[] = [];
     for (const file of this.app.vault.getMarkdownFiles()) {
@@ -76,13 +102,21 @@ export default class SurfacePlugin extends Plugin {
     }
 
     entries.sort((a, b) => b.date.getTime() - a.date.getTime());
-    this.entriesCache = entries;
     return entries;
   }
 
-  async getTermEntries(): Promise<TermEntry[]> {
-    if (this.termEntriesCache) return this.termEntriesCache;
+  getTermEntries(): Promise<TermEntry[]> {
+    if (!this.termEntriesPromise) {
+      const scan = this.scanTermEntries();
+      this.termEntriesPromise = scan;
+      scan.catch(() => {
+        if (this.termEntriesPromise === scan) this.termEntriesPromise = null;
+      });
+    }
+    return this.termEntriesPromise;
+  }
 
+  private async scanTermEntries(): Promise<TermEntry[]> {
     const terms = this.settings.surfaceTerms.filter(t => t.term.trim().length > 0);
     const entries: TermEntry[] = [];
     for (const file of this.app.vault.getMarkdownFiles()) {
@@ -90,7 +124,6 @@ export default class SurfacePlugin extends Plugin {
       entries.push(...parseTermEntries(content, file.path, terms));
     }
 
-    this.termEntriesCache = entries;
     return entries;
   }
 

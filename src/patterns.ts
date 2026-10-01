@@ -29,7 +29,7 @@ const LONG_MONTH: Record<string, number> = {
 
 const SHORT_MONTH: Record<string, number> = {
   jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
-  jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11,
+  jul: 6, aug: 7, sep: 8, sept: 8, oct: 9, nov: 10, dec: 11,
 };
 
 function createValidatedDate(year: number, month: number, day: number): Date | null {
@@ -100,8 +100,8 @@ export const BUILTIN_PATTERN_DEFS: Array<{
   {
     id: "short-month",
     label: "Mon D, YYYY",
-    example: "Mar 4th, 2026 / Apr 23rd, 2026",
-    regex: /^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2})(?:st|nd|rd|th)?,\s+(\d{4})$/i,
+    example: "Mar 4th, 2026 / Sept. 23rd, 2026",
+    regex: /^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sept?|Oct|Nov|Dec)\.?\s+(\d{1,2})(?:st|nd|rd|th)?,\s+(\d{4})$/i,
     toDate(m) {
       const month = SHORT_MONTH[m[1].toLowerCase()];
       if (month === undefined) return null;
@@ -111,8 +111,8 @@ export const BUILTIN_PATTERN_DEFS: Array<{
   {
     id: "day-short-month-year",
     label: "D Mon YYYY",
-    example: "4th Mar 2026 / 23rd Apr 2026",
-    regex: /^(\d{1,2})(?:st|nd|rd|th)?\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{4})$/i,
+    example: "4th Mar 2026 / 23rd Sept 2026",
+    regex: /^(\d{1,2})(?:st|nd|rd|th)?\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sept?|Oct|Nov|Dec)\.?\s+(\d{4})$/i,
     toDate(m) {
       const month = SHORT_MONTH[m[2].toLowerCase()];
       if (month === undefined) return null;

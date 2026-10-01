@@ -24,6 +24,25 @@ void test("every built-in pattern parses its own example", () => {
   }
 });
 
+void test("short month patterns accept Sept and trailing periods", () => {
+  const content = [
+    "### Sept 30, 2026",
+    "a",
+    "### Sep. 29, 2026",
+    "b",
+    "### 28 Sept. 2026",
+    "c",
+    "### Dec. 1st, 2026",
+    "d",
+  ].join("\n");
+
+  const entries = parseEntries(content, "note.md", ALL_PATTERNS);
+  assert.deepEqual(
+    entries.map(e => [e.date.getMonth(), e.date.getDate()]),
+    [[8, 30], [8, 29], [8, 28], [11, 1]],
+  );
+});
+
 void test("parseEntries rejects invalid calendar dates", () => {
   const content = [
     "### February 30, 2026",
